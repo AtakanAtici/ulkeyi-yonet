@@ -1,0 +1,94 @@
+<title>Ülkeyi Yönet</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+<style>
+  /* Yayın iskeleti: oyun tek bir sıcak temaya bilinçli olarak bağlıdır; body arka planı style.css içinde tanımlıdır. */
+  html, body { background: var(--bg); }
+</style>
+<div id="app">
+    <header class="topbar">
+      <div class="brand"><span class="logo">🏛️</span><div><div class="title">Ülkeyi Yönet</div><div class="sub">Ekonomi Simülasyonu</div></div></div>
+      <div class="datebox">
+        <div class="date"><span id="dateLabel">—</span><span class="turn" id="turnLabel"></span></div>
+        <div class="termbar"><div id="termFill"></div></div>
+      </div>
+      <div class="controls">
+        <button id="btnMonth" class="btn primary" title="Boşluk">▶ Ayı İlerlet</button>
+        <button id="btnQuarter" class="btn" title="Shift+Enter">⏩ Çeyrek Sonuna</button>
+        <button id="btnAuto" class="btn ghost" title="Otomatik ilerle">⏯ Otomatik</button>
+        <button id="btnSound" class="btn ghost" title="Ses aç/kapat">🔊</button>
+        <button id="btnMenu" class="btn ghost" title="Menü">☰</button>
+      </div>
+    </header>
+
+    <section class="city-wrap">
+      <canvas id="city"></canvas>
+      <div id="cityTip" class="city-tip hidden"></div>
+      <div class="city-hud">
+        <span id="hudSeason"></span>
+        <span id="hudBread"></span>
+        <span class="hint">Vatandaşa tıkla: derdini anlatır · Binaya tıkla: ilgili politika açılır</span>
+      </div>
+      <div class="ticker"><div class="ticker-track" id="tickerTrack"></div></div>
+    </section>
+
+    <main class="grid">
+      <aside class="panel col-left">
+        <h2>📊 Göstergeler</h2>
+        <div id="indicators" class="indicators"></div>
+        <div class="chart-box">
+          <div class="chart-tabs" id="chartTabs"></div>
+          <canvas id="mainChart" height="190"></canvas>
+        </div>
+      </aside>
+
+      <section class="panel col-mid">
+        <div class="tabs" id="policyTabs">
+          <button data-tab="para" class="active">🏦 Para Politikası</button>
+          <button data-tab="maliye">🏛️ Maliye</button>
+          <button data-tab="program">📦 Programlar</button>
+        </div>
+        <div id="tab-para" class="tab"></div>
+        <div id="tab-maliye" class="tab hidden"></div>
+        <div id="tab-program" class="tab hidden"></div>
+      </section>
+
+      <aside class="panel col-right">
+        <h2>👥 Halk</h2>
+        <div class="gauges">
+          <div><canvas id="gSupport" width="110" height="64"></canvas><label>Kamuoyu desteği</label></div>
+          <div><canvas id="gAnger" width="110" height="64"></canvas><label>Halk tepkisi</label></div>
+          <div><canvas id="gCred" width="110" height="64"></canvas><label>Güvenilirlik</label></div>
+        </div>
+        <div id="segments" class="segments"></div>
+        <div class="voices">
+          <h3>🗣️ Sokaktan sesler</h3>
+          <ul id="voiceList"></ul>
+        </div>
+        <div class="advisor-card">
+          <div class="advisor-avatar small"></div>
+          <div><div class="advisor-name">Dr. Nilüfer Fehris <span>Başekonomist</span></div><div id="advisorNote" class="advisor-note"></div></div>
+        </div>
+      </aside>
+    </main>
+
+    <nav class="mobile-bar">
+      <div class="mb-date" id="mbDate"></div>
+      <button id="mbMonth" class="btn primary">▶ Ay</button>
+      <button id="mbQuarter" class="btn">⏩</button>
+      <button id="mbAuto" class="btn ghost">⏯</button>
+      <button id="mbMenu" class="btn ghost">☰</button>
+    </nav>
+
+    <div id="modal" class="modal hidden"><div class="modal-card" id="modalCard"></div></div>
+    <div id="toasts" class="toasts"></div>
+  </div>
+
+  <script src="js/model.js"></script>
+  <script src="js/events.js"></script>
+  <script src="js/voices.js"></script>
+  <script src="js/charts.js"></script>
+  <script src="js/sound.js"></script>
+  <script src="js/city.js"></script>
+  <script src="js/main.js"></script>
