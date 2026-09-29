@@ -77,6 +77,11 @@
     win: () => { seq([523, 659, 784, 1047, 1319], 0.26, 'triangle', 0.18, 0.13); seq([262, 330, 392, 523, 659], 0.26, 'sine', 0.12, 0.13); noise(0.6, 5000, 0.05, { delay: 0.6 }); },
     lose: () => { seq([440, 392, 349, 294, 220], 0.4, 'sawtooth', 0.08, 0.28); tone(110, 1.2, 'square', 0.05, { to: 60, delay: 1.2 }); },
     alarm: () => { seq([880, 660, 880, 660], 0.14, 'square', 0.07, 0.14); },
+    siren: () => { for (let i = 0; i < 3; i++) { tone(520, 0.9, 'sawtooth', 0.06, { to: 980, delay: i * 1.8, attack: 0.4 }); tone(980, 0.9, 'sawtooth', 0.06, { to: 520, delay: i * 1.8 + 0.9, attack: 0.05 }); } },
+    boom: () => { noise(0.7, 120, 0.35, { type: 'lowpass', q: 0.5, attack: 0.01 }); tone(70, 0.6, 'sine', 0.25, { to: 35 }); noise(0.25, 2500, 0.08, { attack: 0.005 }); },
+    flak: () => { noise(0.12, 1800, 0.12, { attack: 0.005 }); tone(900, 0.08, 'square', 0.05, { to: 300 }); },
+    plane: () => { tone(110, 2.2, 'sawtooth', 0.05, { to: 80, attack: 0.6 }); tone(112, 2.2, 'sawtooth', 0.04, { to: 82, attack: 0.6 }); },
+    warStart: () => { seq([220, 220, 220, 175], 0.35, 'square', 0.1, 0.3); noise(1.2, 200, 0.15, { type: 'lowpass', attack: 0.3, delay: 1.0 }); },
   };
 
   function play(name) {

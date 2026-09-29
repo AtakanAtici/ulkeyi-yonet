@@ -187,7 +187,7 @@
       id: 'teknoloji', icon: '💡', title: 'Teknoloji Vadisi Açıldı', weight: 1.2,
       text: 'Üniversite-sanayi işbirliğiyle kurulan teknoloji vadisi ilk şirketlerini ağırlıyor. Yazılım ihracatı artıyor, gençler burada çalışmak istiyor.',
       cond: s => s.policy.invest >= 6,
-      choices: [{ label: 'Destekle', desc: 'Potansiyel büyüme kalıcı olarak artar.', apply: s => { s.potential += 0.25; s.moods.genc += 7; } }],
+      choices: [{ label: 'Destekle', desc: 'Potansiyel büyüme ve teknoloji seviyesi kalıcı olarak artar.', apply: s => { s.potential += 0.25; s.tech = Math.min(100, s.tech + 10); s.moods.genc += 7; } }],
     },
     {
       id: 'secimvaadi', icon: '🗳️', title: 'Seçim Yaklaşıyor', weight: 2.5,
@@ -217,6 +217,25 @@
         { label: 'Şimdi değil', desc: 'Mevcut yolda devam.', apply: s => { s.cred -= 1; } },
       ],
     },
+    {
+      id: 'gerilim', icon: '🪖', title: 'Sınırda Gerilim Tırmanıyor', weight: 3, once: true,
+      text: 'Komşu ülke sınıra birlik yığıyor, devlet televizyonunda tehditkâr açıklamalar yapılıyor. İstihbarat: "Aylar içinde saldırı olasılığı yüksek." Savunma gücünüz ve teknolojiniz ne durumda?',
+      cond: s => s.turn >= 6 && !s.war && !s.flags.warDone,
+      choices: [
+        { label: 'Savunmaya acil kaynak ayır', desc: 'Savunma harcaması +2 puan, AR-GE +0,5 puan. Bütçe zorlanır ama ordu güçlenir.', apply: s => { s.flags.tension = true; s.policy.defense = Math.min(8, s.policy.defense + 2); s.policy.rnd = Math.min(4, s.policy.rnd + 0.5); s.defense = Math.min(100, s.defense + 6); } },
+        { label: 'Diplomasi girişimi başlat', desc: 'Güvenilirlik +2; savaş yine de gelebilir.', apply: s => { s.flags.tension = true; s.flags.diplomacy = true; s.cred += 2; } },
+        { label: 'Görmezden gel', desc: 'Piyasa sakin kalır; hazırlıksız yakalanma riski.', apply: s => { s.flags.tension = true; s.moods.esnaf += 2; } },
+      ],
+    },
+    {
+      id: 'savasilani', icon: '💣', title: 'DÜŞMAN ÜLKE SAVAŞ AÇTI!', weight: 0, once: true, manual: true,
+      text: 'Şafakta sınır karakolları vuruldu, ilk füzeler başkente düştü. Sirenler çalıyor, halk sokakta. Genelkurmay acil karar bekliyor: direnecek miyiz, seferberlik ilan edecek miyiz, yoksa masaya mı oturacağız?',
+      choices: [
+        { label: 'Direneceğiz!', desc: 'Savaş başlar. Savunma gücü ve teknolojiniz cephede belirleyici olur.', apply: (s, rng) => { War.declare(s, rng || Model.makeRng(s.seed + s.turn), {}); } },
+        { label: 'Seferberlik ilan et ve diren', desc: 'Hemen tam seferberlik: güç +18, ekonomi savaş düzenine geçer.', apply: (s, rng) => { War.declare(s, rng || Model.makeRng(s.seed + s.turn), { mobilize: true }); } },
+        { label: 'Toprak ver, barış iste', desc: 'Savaş olmaz ama halk aşağılanmayı affetmez: destek −18, güvenilirlik −8, borç +5.', apply: s => { s.flags.warDone = true; s.flags.tension = false; s.flags.appeased = true; SEG(s, -18); s.cred -= 8; s.debt += 5; s.anger = Math.min(100, s.anger + 15); } },
+      ],
+    },
   ];
 
   function SEG(s, d) { Object.keys(s.moods).forEach(k => s.moods[k] = cl(s.moods[k] + d, 0, 100)); }
@@ -226,6 +245,7 @@
     if (rng() > diff.shockProb) return null;
     const recent = state.events.slice(-6).map(e => e.id);
     const pool = EVENTS.filter(e => {
+      if (e.manual || e.weight <= 0) return false;
       if (recent.includes(e.id)) return false;
       if (e.once && state.events.some(x => x.id === e.id)) return false;
       try { return !e.cond || e.cond(state); } catch (err) { return false; }

@@ -21,6 +21,8 @@
     { key: 'deficit', label: 'Bütçe Açığı', unit: '% GSYH', dec: 1, color: '#a05a2c', good: 'down', bar: [-2, 12] },
     { key: 'ca', label: 'Cari Denge', unit: '% GSYH', dec: 1, color: '#5b8def', good: 'up', bar: [3, -8] },
     { key: 'cred', label: 'Güvenilirlik', unit: '/100', dec: 0, color: '#7c5cbf', good: 'up', bar: [100, 0] },
+    { key: 'defense', label: 'Savunma Gücü', unit: '/100', dec: 0, color: '#4b6b3a', good: 'up', bar: [100, 0] },
+    { key: 'tech', label: 'Teknoloji', unit: '/100', dec: 0, color: '#0e7490', good: 'up', bar: [100, 0] },
   ];
   const CHART_SETS = {
     infl: { name: 'Enflasyon', series: [['infl', 'Manşet', '#d9534f'], ['core', 'Çekirdek', '#e08e3c'], ['exp', 'Beklenti', '#c47ad1'], ['rate', 'Politika faizi', '#3b6fb6', [4, 3]]], unit: '%', target: s => s.target },
@@ -29,6 +31,7 @@
     reserves: { name: 'Rezerv & CDS', series: [['reserves', 'Rezerv (mlr $)', '#2a9d8f'], ['cds', 'CDS (bp)', '#8d5524']], unit: '' },
     fiscal: { name: 'Bütçe', series: [['debt', 'Borç/GSYH', '#6c757d'], ['deficit', 'Açık', '#a05a2c']], unit: '%' },
     people: { name: 'Halk', series: [['support', 'Destek', '#2e8b57'], ['cred', 'Güvenilirlik', '#7c5cbf']], unit: '' },
+    guc: { name: 'Savunma & Teknoloji', series: [['defense', 'Savunma', '#4b6b3a'], ['tech', 'Teknoloji', '#0e7490']], unit: '' },
   };
   const FACES = m => m >= 75 ? '😄' : m >= 60 ? '🙂' : m >= 45 ? '😐' : m >= 30 ? '😟' : '😡';
   const SEG_ICON = { isci: '👷', emekli: '👴', esnaf: '👔', ciftci: '👩‍🌾', memur: '🧑‍💼', genc: '🧑‍🎓' };
@@ -37,7 +40,7 @@
 
   // ============ Başlangıç ============
   function init() {
-    G.city = new City($('city'), { onBuildingClick: onBuildingClick, onHover: onCityHover, onAgentClick: onAgentClick });
+    G.city = new City($('city'), { onBuildingClick: onBuildingClick, onHover: onCityHover, onAgentClick: onAgentClick, onSound: n => Sound.play(n) });
     bindUI();
     const saved = load();
     if (saved) showContinueModal(saved); else showStartModal();
@@ -89,7 +92,7 @@
 
   function selectTab(t) {
     document.querySelectorAll('#policyTabs button').forEach(b => b.classList.toggle('active', b.dataset.tab === t));
-    ['para', 'maliye', 'program'].forEach(k => $('tab-' + k).classList.toggle('hidden', k !== t));
+    ['para', 'maliye', 'program', 'savas'].forEach(k => $('tab-' + k).classList.toggle('hidden', k !== t));
   }
   function onBuildingClick(type) {
     const map = { cb: 'para', bank: 'para', meclis: 'maliye', market: 'program', factory: 'program', site: 'maliye' };
@@ -157,6 +160,10 @@
         ${slider({ key: 'spendCurrent', label: 'Cari harcamalar (% GSYH)', value: p.spendCurrent, min: 14, max: 32, step: 0.5, fmt: pct })}
         ${slider({ key: 'invest', label: 'Yatırım harcamaları (% GSYH)', value: p.invest, min: 1, max: 12, step: 0.5, fmt: pct })}
         ${slider({ key: 'transfers', label: 'Sosyal transferler (% GSYH)', value: p.transfers, min: 3, max: 16, step: 0.5, fmt: pct })}
+      </div>
+      <div class="group"><h3>🛡️ Savunma ve Teknoloji</h3><div class="desc">Savunma harcaması orduyu ve hava savunmasını güçlendirir; AR-GE teknoloji seviyesini yükseltir ve büyümeyi besler. İkisi de yavaş birikir: bir saldırı geldiğinde geçmişte yaptığınız yatırım belirleyici olur.</div>
+        ${slider({ key: 'defense', label: 'Savunma harcaması (% GSYH)', value: p.defense, min: 0.5, max: 8, step: 0.5, fmt: pct, hint: 'Savunma gücü: <b id="defHint"></b>' })}
+        ${slider({ key: 'rnd', label: 'Teknoloji ve AR-GE (% GSYH)', value: p.rnd, min: 0, max: 4, step: 0.25, fmt: v => '%' + fmtN(v, 2), hint: 'Teknoloji seviyesi: <b id="techHint"></b>' })}
       </div>`;
     $('tab-program').innerHTML = `<div class="desc note" style="margin-bottom:10px">Programlar açık kaldığı sürece bütçeye yük bindirir (ya da tasarruf sağlar) ve halk kesimlerini doğrudan etkiler.</div>` +
       Model.PROGRAMS.map(pr => `<div class="program" data-prog="${pr.id}"><div class="ico">${pr.icon}</div><div class="info"><b>${pr.name}</b><p>${pr.desc}</p><div class="cost">${pr.cost > 0 ? 'Maliyet' : 'Tasarruf'}: ${fmtN(Math.abs(pr.cost), 1)} puan GSYH / yıl</div></div><div class="switch" data-prog="${pr.id}"></div></div>`).join('') +
@@ -179,7 +186,7 @@
 
   function rateMax(s) { return (s.exp > 45 || s.infl > 45 || s.policy.rate > 70) ? 200 : 80; }
   function setPolicy(key, val, fromSlider) {
-    const p = G.state.policy; const ranges = { rate: [0, rateMax(G.state)], rr: [0, 30], rrFx: [0, 40], directTax: [10, 30], indirectTax: [10, 28], spendCurrent: [14, 32], invest: [1, 12], transfers: [3, 16] };
+    const p = G.state.policy; const ranges = { rate: [0, rateMax(G.state)], rr: [0, 30], rrFx: [0, 40], directTax: [10, 30], indirectTax: [10, 28], spendCurrent: [14, 32], invest: [1, 12], transfers: [3, 16], defense: [0.5, 8], rnd: [0, 4] };
     if (ranges[key]) val = Model.clamp(val, ranges[key][0], ranges[key][1]);
     if (key === 'intervention' && val > 0 && G.state.reserves - val < 0) { toast('Yeterli rezerv yok!', 'bad'); return; }
     const old = p[key]; p[key] = val;
@@ -192,15 +199,16 @@
 
   function renderPolicy(syncSliders) {
     const s = G.state, p = s.policy, prev = s.prevPolicy;
-    const fm = { rate: v => '%' + fmtN(v, 2), rr: v => '%' + fmtN(v, 1), rrFx: v => '%' + fmtN(v, 1), directTax: v => '%' + fmtN(v, 1), indirectTax: v => '%' + fmtN(v, 1), spendCurrent: v => '%' + fmtN(v, 1), invest: v => '%' + fmtN(v, 1), transfers: v => '%' + fmtN(v, 1) };
+    const fm = { rate: v => '%' + fmtN(v, 2), rr: v => '%' + fmtN(v, 1), rrFx: v => '%' + fmtN(v, 1), directTax: v => '%' + fmtN(v, 1), indirectTax: v => '%' + fmtN(v, 1), spendCurrent: v => '%' + fmtN(v, 1), invest: v => '%' + fmtN(v, 1), transfers: v => '%' + fmtN(v, 1), defense: v => '%' + fmtN(v, 1), rnd: v => '%' + fmtN(v, 2) };
     Object.keys(fm).forEach(k => { const el = $('v-' + k); if (!el) return; el.textContent = fm[k](p[k]); el.classList.toggle('changed', Math.abs(p[k] - prev[k]) > 1e-9); if (syncSliders !== false) { const inp = document.querySelector(`input[data-key=${k}]`); if (inp && parseFloat(inp.value) !== p[k]) inp.value = p[k]; } });
     document.querySelectorAll('.seg-btns, .fx-row').forEach(box => { const k = box.dataset.key; box.querySelectorAll('button').forEach(b => { const v = isNaN(parseFloat(b.dataset.val)) ? b.dataset.val : parseFloat(b.dataset.val); b.classList.toggle('active', v === p[k]); }); });
     const iv = $('v-intervention'); if (iv) iv.textContent = p.intervention > 0 ? `Sat ${p.intervention} mlr $` : (p.intervention < 0 ? `Al ${-p.intervention} mlr $` : 'Yok');
     const rs = document.querySelector('input[data-key=rate]'); if (rs) { const mx = rateMax(s); if (parseFloat(rs.max) !== mx) rs.max = mx; }
+    const dh = $('defHint'); if (dh) dh.textContent = Math.round(s.defense) + '/100'; const th = $('techHint'); if (th) th.textContent = Math.round(s.tech) + '/100';
     const rr = $('realRateHint'); if (rr) { const r = p.rate - s.exp; rr.textContent = (r >= 0 ? '+' : '') + fmtN(r, 1) + ' puan' + (r < 0 ? ' (negatif: TL cazip değil)' : r > 10 ? ' (çok sıkı)' : ''); rr.style.color = r < 0 ? 'var(--red)' : 'var(--green)'; }
     document.querySelectorAll('.switch[data-prog]').forEach(sw => { sw.classList.toggle('on', !!s.programs[sw.dataset.prog]); sw.closest('.program').classList.toggle('on', !!s.programs[sw.dataset.prog]); });
     const bb = $('budgetBox'); if (bb) {
-      const taxes = p.directTax + p.indirectTax, spend = p.spendCurrent + p.invest + p.transfers + Model.PROGRAMS.reduce((a, x) => a + (s.programs[x.id] ? x.cost : 0), 0);
+      const taxes = p.directTax + p.indirectTax, spend = p.spendCurrent + p.invest + p.transfers + p.defense + p.rnd + Model.PROGRAMS.reduce((a, x) => a + (s.programs[x.id] ? x.cost : 0), 0);
       bb.innerHTML = `<div>Gelirler<b>%${fmtN(taxes, 1)}</b></div><div>Harcamalar<b>%${fmtN(spend, 1)}</b></div><div>Faiz yükü<b>%${fmtN(s.interest, 1)}</b></div><div>Bütçe ${s.deficit >= 0 ? 'açığı' : 'fazlası'}<b style="color:${s.deficit > 5 ? 'var(--red)' : 'var(--green)'}">%${fmtN(Math.abs(s.deficit), 1)}</b></div>`;
     }
     const mw = $('minWageLast'); if (mw) mw.textContent = p.minWageRaise === null ? 'henüz yok' : '%' + fmtN(p.minWageRaise, 0) + ' zam';
@@ -208,7 +216,7 @@
 
   // ============ Render ============
   function renderAll(full) {
-    renderHeader(); renderIndicators(true); renderChart(); renderPeople(); renderPolicy(true); renderTicker();
+    renderHeader(); renderIndicators(true); renderChart(); renderPeople(); renderPolicy(true); renderTicker(); renderWar();
     G.city.setState(G.state);
   }
   function renderHeader() {
@@ -217,7 +225,7 @@
     $('turnLabel').textContent = `${s.turn + 1}. ay / ${s.termMonths} · Skor ${s.score}`;
     $('termFill').style.width = (s.turn / s.termMonths * 100) + '%';
     const seasons = { kis: '❄️ Kış', ilkbahar: '🌸 İlkbahar', yaz: '☀️ Yaz', sonbahar: '🍂 Sonbahar' };
-    $('hudSeason').textContent = seasons[G.city.season] || '';
+    $('hudSeason').textContent = (s.war && s.war.active ? `⚔️ SAVAŞ ${s.war.month + 1}. ay · ` : '') + (seasons[G.city.season] || '');
     $('hudBread').textContent = `🥖 Ekmek ₺${s.breadPrice >= 100 ? fmtN(s.breadPrice, 0) : fmtN(s.breadPrice, 2)}`;
     $('btnAuto').classList.toggle('on', !!G.auto);
     $('mbAuto').classList.toggle('on', !!G.auto);
@@ -227,7 +235,7 @@
     const s = G.state, box = $('indicators');
     if (!box.children.length) {
       box.innerHTML = INDICATORS.map(d => `<div class="ind" data-key="${d.key}"><div class="lbl"><span>${d.label}</span><span class="delta" id="d-${d.key}"></span></div><div class="val" id="i-${d.key}">—</div>${d.target ? `<div class="tgt" id="t-${d.key}"></div>` : ''}${d.bar ? `<div class="bar"><i id="b-${d.key}"></i></div>` : ''}<canvas id="c-${d.key}"></canvas></div>`).join('');
-      box.querySelectorAll('.ind').forEach(el => el.addEventListener('click', () => { G.selectedInd = el.dataset.key; const map = { infl: 'infl', core: 'infl', exp: 'infl', growth: 'growth', unemp: 'growth', fx: 'fx', reserves: 'reserves', cds: 'reserves', debt: 'fiscal', deficit: 'fiscal', ca: 'fiscal', cred: 'people' }; G.chart = map[el.dataset.key]; renderChart(); box.querySelectorAll('.ind').forEach(x => x.classList.toggle('selected', x === el)); }));
+      box.querySelectorAll('.ind').forEach(el => el.addEventListener('click', () => { G.selectedInd = el.dataset.key; const map = { infl: 'infl', core: 'infl', exp: 'infl', growth: 'growth', unemp: 'growth', fx: 'fx', reserves: 'reserves', cds: 'reserves', debt: 'fiscal', deficit: 'fiscal', ca: 'fiscal', cred: 'people', defense: 'guc', tech: 'guc' }; G.chart = map[el.dataset.key]; renderChart(); box.querySelectorAll('.ind').forEach(x => x.classList.toggle('selected', x === el)); }));
     }
     const h = s.history, prev = h.length > 1 ? h[h.length - 2] : null;
     INDICATORS.forEach(d => {
@@ -300,9 +308,13 @@
     // Çeyrek raporu
     const isQuarter = s.turn % 3 === 0;
     const sc = Model.SCENARIOS.find(x => x.id === s.scenarioId);
-    const ev = s.gameOver ? null : (s.turn === 1 && sc && sc.firstEvent ? Events.EVENTS.find(x => x.id === sc.firstEvent) : Events.pickEvent(s, G.rng));
+    let ev = s.gameOver ? null : (s.turn === 1 && sc && sc.firstEvent ? Events.EVENTS.find(x => x.id === sc.firstEvent) : Events.pickEvent(s, G.rng));
+    if (!s.gameOver && War.shouldDeclare(s, G.rng)) ev = Events.EVENTS.find(x => x.id === 'savasilani');
+    const warEnded = report.war && report.war.type !== 'devam';
     const afterEvent = () => { if (isQuarter && !s.gameOver) showReport(report, cont); else cont(); };
-    setTimeout(() => { if (ev) showEvent(ev, afterEvent); else afterEvent(); }, 500);
+    const afterWar = () => { if (ev) showEvent(ev, afterEvent); else afterEvent(); };
+    if (warEnded) { setTimeout(() => showWarOutcome(report.war, afterWar), 500); return; }
+    setTimeout(afterWar, 500);
   }
   function toggleAuto() { if (G.auto) stopAuto(); else { G.auto = true; renderHeader(); advance(1); } }
   function stopAuto() { G.auto = false; clearTimeout(G.autoTimer); renderHeader(); }
@@ -350,7 +362,8 @@
     const c = showModal(`<div class="modal-head"><div class="ico">${ev.icon}</div><div><div class="kicker">Son dakika · ${Model.MONTHS[G.state.month - 1]} ${G.state.year}</div><h2>${ev.title}</h2></div></div>
       <div class="modal-body"><p>${ev.text}</p><h3>Kararınız?</h3>${ev.choices.map((ch, i) => `<button class="choice" data-i="${i}"><b>${ch.label}</b><span>${ch.desc}</span></button>`).join('')}</div>`);
     c.querySelectorAll('.choice').forEach(b => b.addEventListener('click', () => {
-      const ch = ev.choices[parseInt(b.dataset.i)]; ch.apply(G.state); Sound.play('click');
+      const ch = ev.choices[parseInt(b.dataset.i)]; const wasWar = !!(G.state.war && G.state.war.active); ch.apply(G.state, G.rng); Sound.play('click');
+      if (!wasWar && G.state.war && G.state.war.active) { Sound.play('warStart'); setTimeout(() => Sound.play('siren'), 900); toast('⚔️ Savaş başladı! Savaş Kabinesi sekmesi açıldı.', 'bad'); setTimeout(() => selectTab('savas'), 600); }
       Model.SEGMENTS.forEach(sg => G.state.moods[sg.id] = Model.clamp(G.state.moods[sg.id], 0, 100));
       G.state.cred = Model.clamp(G.state.cred, 0, 100); G.state.support = Model.clamp(G.state.support, 0, 100); G.state.anger = Model.clamp(G.state.anger, 0, 100);
       G.state.events.push({ id: ev.id, turn: G.state.turn, choice: ch.label, title: ev.title });
@@ -391,9 +404,11 @@
     Sound.play(won ? 'win' : 'lose');
     const first = s.history[0], last = s.history[s.history.length - 1];
     const scoreId = recordScore(s);
-    showModal(`<div class="modal-head"><div class="ico">${won ? '🏆' : go.type === 'secim_yenilgi' ? '🗳️' : '💥'}</div><div><div class="kicker">Oyun bitti · ${s.turn}. ay</div><h2>${go.title}</h2></div></div>
-      <div class="modal-body"><p>${go.text}</p><div class="grade ${gr}">${gr}</div><p style="text-align:center"><b>Toplam skor: ${s.score}</b> · Ortalama ${Math.round(s.score / Math.max(1, s.turn))}/ay</p>
+    const occupied = go.type === 'isgal';
+    showModal(`<div class="modal-head ${occupied ? 'grim' : ''}"><div class="ico">${won ? '🏆' : go.type === 'secim_yenilgi' ? '🗳️' : occupied ? '💀' : '💥'}</div><div><div class="kicker">Oyun bitti · ${s.turn}. ay</div><h2>${go.title}</h2></div></div>
+      <div class="modal-body">${occupied ? occupationScene() : ''}<p>${go.text}</p><div class="grade ${gr}">${gr}</div><p style="text-align:center"><b>Toplam skor: ${s.score}</b> · Ortalama ${Math.round(s.score / Math.max(1, s.turn))}/ay</p>
         <div class="stats-grid"><div>Enflasyon<b>%${fmtN(first.infl, 1)} → %${fmtN(last.infl, 1)}</b></div><div>İşsizlik<b>%${fmtN(first.unemp, 1)} → %${fmtN(last.unemp, 1)}</b></div><div>USD/TRY<b>${fmtN(first.fx, 2)} → ${fmtN(last.fx, 2)}</b></div><div>Rezervler<b>${fmtN(first.reserves, 0)} → ${fmtN(last.reserves, 0)}</b></div><div>Destek<b>${Math.round(first.support)} → ${Math.round(last.support)}</b></div><div>Güvenilirlik<b>${Math.round(first.cred)} → ${Math.round(last.cred)}</b></div></div>
+        ${(s.warHistory || []).length ? `<h3>⚔️ Savaş</h3><div class="note">${s.warHistory.map(w => `${War.OUTCOME_TEXT[w.outcome].icon} ${War.OUTCOME_TEXT[w.outcome].title} · ${w.months} ay · ${w.casualties} bin kayıp · düşman gücü ${w.enemy}`).join(' · ')}</div>` : ''}
         ${s.events.length ? `<h3>Yaşanan olaylar</h3><div class="note">${s.events.map(e => `${e.title} → ${e.choice}`).join(' · ')}</div>` : ''}
         <h3>🏆 Skor tablosu</h3><div class="name-row"><label for="nameInput">Adınız:</label><input id="nameInput" maxlength="20" value="${esc(playerName())}" placeholder="Başkan"></div><div id="lbBox">${scoreTableHtml(scoreId, 10)}</div></div>
       <div class="modal-foot"><button class="btn light" id="endClose">Tabloyu İncele</button><button class="btn light" id="endScores">Tüm skorlar</button><button class="btn primary" id="endNew">🔄 Yeni Oyun</button></div>`);
@@ -413,6 +428,70 @@
     confirmButton($('mNew'), '⚠️ Eminim, mevcut oyunu sil', () => { try { localStorage.removeItem(SAVE_KEY); } catch (e) { /* yoksay */ } stopAuto(); closeModal(); showStartModal(); });
   }
 
+  // ============ Savaş Kabinesi ============
+  function renderWar() {
+    const s = G.state, w = s.war; const btn = document.querySelector('#policyTabs [data-tab=savas]'); const box = $('tab-savas');
+    const show = !!w && (w.active || s.turn - (w.endTurn || 0) <= 3);
+    btn.classList.toggle('hidden', !show); btn.classList.toggle('war-active', !!(w && w.active));
+    if (!show) { if (!$('tab-savas').classList.contains('hidden')) selectTab('maliye'); return; }
+    const pw = War.power(s), ratio = pw / w.enemy;
+    const frontPct = ((w.front + 100) / 200 * 100).toFixed(1);
+    const verdict = w.front > 25 ? 'Ordumuz ilerliyor' : w.front > 0 ? 'Hafif üstünlük bizde' : w.front > -25 ? 'Düşman baskısı sürüyor' : 'Cephe çöküyor!';
+    const strength = ratio >= 1.2 ? 'Açık üstünlük' : ratio >= 0.95 ? 'Denge' : ratio >= 0.7 ? 'Zayıfız' : 'Çok zayıfız: işgal riski';
+    const headline = w.active ? `<div class="war-head"><div><div class="kicker">${w.name} · ${w.month}/${w.duration}. ay</div><h3>⚔️ Savaş Kabinesi</h3></div><div class="war-verdict ${w.front >= 0 ? 'good' : 'bad'}">${verdict}</div></div>`
+      : `<div class="war-head"><div><div class="kicker">${w.name}</div><h3>${War.OUTCOME_TEXT[w.outcome].icon} ${War.OUTCOME_TEXT[w.outcome].title}</h3></div></div><p class="note">${w.why || ''} Kayıplar: ${Math.round(w.casualties)} bin.</p>`;
+    box.innerHTML = headline + (w.active ? `
+      <div class="group war-status">
+        <div class="front-label"><span>Düşman ilerliyor</span><span>Cephe</span><span>Biz ilerliyoruz</span></div>
+        <div class="front-bar"><i style="left:${frontPct}%"></i></div>
+        <div class="power-row"><div><small>Savaş gücümüz</small><b>${Math.round(pw)}</b><div class="pbar"><i style="width:${Math.min(100, pw)}%;background:#2e8b57"></i></div></div>
+        <div><small>Düşman gücü</small><b>${w.enemy}</b><div class="pbar"><i style="width:${Math.min(100, w.enemy)}%;background:#b91c1c"></i></div></div></div>
+        <div class="war-facts"><span>${strength}</span><span>Kayıplar: <b>${Math.round(w.casualties)} bin</b></span><span>Savunma ${Math.round(s.defense)} · Teknoloji ${Math.round(s.tech)}</span>${w.mobilized ? '<span>📯 Seferberlik</span>' : ''}${w.allies ? '<span>🤝 Müttefik desteği</span>' : ''}${w.civil ? '<span>🛡️ Sivil savunma</span>' : ''}${w.martial ? '<span>🚧 Sıkıyönetim</span>' : ''}</div>
+        <p class="note">Güç: savunma gücü ve teknoloji seviyesi, seferberlik ve müttefik desteği. Cephe her ay güç oranına göre ilerler; savaş ${w.duration} ay sürebilir ya da cephe çökünce biter.</p>
+      </div>
+      <h3 class="war-h">Kararlar</h3>` + War.ACTIONS.map(a => { const used = !!w[a.id + 'Used']; const ok = !a.cond || a.cond(s); return `<div class="program war-action ${used ? 'used' : ''}"><div class="ico">${a.icon}</div><div class="info"><b>${a.name}</b><p>${a.desc}</p><div class="cost">${a.cost}</div></div><button class="btn small ${used ? 'light' : 'danger'}" data-war="${a.id}" ${used || !ok ? 'disabled' : ''}>${used ? 'Yapıldı' : ok ? 'Uygula' : 'Koşul yok'}</button></div>`; }).join('') : '');
+    box.querySelectorAll('button[data-war]').forEach(b => b.addEventListener('click', () => {
+      const res = War.applyAction(G.state, b.dataset.war, G.rng); if (!res) return;
+      Sound.play(b.dataset.war === 'ceasefire' ? 'event' : 'alarm');
+      const a = War.ACTIONS.find(x => x.id === b.dataset.war); toast(a.icon + ' ' + a.name);
+      if (b.dataset.war === 'mobilize') G.city.floatAt('meclis', '📯 SEFERBERLİK', '#fca5a5');
+      Model.recomputeDerived(G.state); Model.checkGameOver(G.state);
+      renderAll(); save();
+      if (res.type && res.type !== 'devam' && War.OUTCOME_TEXT[res.type]) showWarOutcome(res, () => { if (G.state.gameOver) showEnd(); });
+    }));
+  }
+  function showWarOutcome(res, done) {
+    const o = War.OUTCOME_TEXT[res.type]; if (!o) { done(); return; }
+    Sound.play(res.type === 'zafer' ? 'win' : res.type === 'ateskes' ? 'report' : 'lose');
+    stopAutoSoft();
+    G.city.floatAt('meclis', o.icon + ' ' + o.title.toUpperCase(), res.type === 'zafer' ? '#86efac' : '#fca5a5');
+    const w = G.state.war;
+    showModal(`<div class="modal-head"><div class="ico">${o.icon}</div><div><div class="kicker">Savaş sona erdi · ${w.month} ay</div><h2>${o.title}</h2></div></div>
+      <div class="modal-body"><p>${o.text}</p><p class="note">${res.why || ''}</p>
+      <div class="stats-grid"><div>Kayıplar<b>${Math.round(w.casualties)} bin</b></div><div>Düşman gücü<b>${w.enemy}</b></div><div>Gücümüz<b>${Math.round(War.power(G.state))}</b></div></div></div>
+      <div class="modal-foot"><button class="btn primary" id="warOk">Devam</button></div>`);
+    $('warOk').addEventListener('click', () => { closeModal(); done(); });
+  }
+
+  // İşgal sahnesi: kızıl gökyüzü, yanan şehir silüeti, düşman bayrağı ve darağacı (siluet)
+  function occupationScene() {
+    return `<div class="occupation"><svg viewBox="0 0 600 220" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="İşgal edilmiş şehir">
+      <defs><linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1a0606"/><stop offset=".55" stop-color="#7a1414"/><stop offset="1" stop-color="#d9532b"/></linearGradient>
+      <radialGradient id="fire" cx=".5" cy=".9" r=".6"><stop offset="0" stop-color="#ffb347" stop-opacity=".9"/><stop offset="1" stop-color="#ffb347" stop-opacity="0"/></radialGradient></defs>
+      <rect width="600" height="220" fill="url(#sky)"/>
+      <circle cx="480" cy="70" r="26" fill="#f3d9a0" opacity=".85"/>
+      <g fill="#2a0a0a"><rect x="20" y="120" width="50" height="80"/><rect x="80" y="95" width="34" height="105"/><path d="M120 200 V130 l14 -22 l14 22 V200Z"/><rect x="160" y="110" width="60" height="90"/><rect x="300" y="100" width="40" height="100"/><rect x="350" y="125" width="70" height="75"/><rect x="430" y="105" width="30" height="95"/><path d="M470 200 V140 l40 -30 l40 30 V200Z"/><rect x="560" y="130" width="30" height="70"/></g>
+      <g fill="#150404"><path d="M180 110 l10 -30 l8 30Z"/><path d="M355 125 l15 -25 l12 25Z"/></g>
+      <ellipse cx="100" cy="120" rx="40" ry="30" fill="url(#fire)"/><ellipse cx="330" cy="120" rx="45" ry="34" fill="url(#fire)"/>
+      <g fill="#3a3a3a" opacity=".7"><circle cx="95" cy="70" r="14"/><circle cx="110" cy="58" r="18"/><circle cx="325" cy="62" r="16"/><circle cx="345" cy="50" r="20"/></g>
+      <rect x="0" y="200" width="600" height="20" fill="#120303"/>
+      <g fill="#0b0202"><rect x="236" y="90" width="6" height="112"/><rect x="236" y="90" width="58" height="6"/><path d="M242 96 l16 0 l-16 16Z"/><rect x="286" y="96" width="2" height="26"/><ellipse cx="287" cy="126" rx="6" ry="4" fill="none" stroke="#0b0202" stroke-width="2"/></g>
+      <g fill="#0b0202"><circle cx="287" cy="136" r="5"/><rect x="282" y="141" width="10" height="20" rx="3"/><rect x="283" y="160" width="3" height="16"/><rect x="288" y="160" width="3" height="16"/></g>
+      <g><rect x="520" y="120" width="3" height="80" fill="#0b0202"/><path d="M523 120 h40 l-8 10 l8 10 h-40Z" fill="#111"/><rect x="523" y="120" width="40" height="20" fill="none" stroke="#b91c1c" stroke-width="2"/></g>
+      <text x="300" y="30" text-anchor="middle" font-family="Nunito, sans-serif" font-weight="900" font-size="16" fill="#fecaca" letter-spacing="4">İŞGAL ALTINDA</text>
+    </svg></div>`;
+  }
+
   // ============ Skor tablosu ============
   function loadScores() { try { return JSON.parse(localStorage.getItem(LB_KEY)) || []; } catch (e) { return []; } }
   function saveScores(list) { try { localStorage.setItem(LB_KEY, JSON.stringify(list.slice(0, 50))); } catch (e) { /* yoksay */ } }
@@ -427,7 +506,7 @@
     return entry.id;
   }
   function renameScore(id, name) { const list = loadScores(); const e = list.find(x => x.id === id); if (e) { e.name = name; saveScores(list); } try { localStorage.setItem(NAME_KEY, name); } catch (err) { /* yoksay */ } }
-  const OUTCOME = { secim_zafer: '🏆 Seçim zaferi', secim_yenilgi: '🗳️ Seçim yenilgisi', istifa: '📢 İstifa', hiper: '☢️ Hiperenflasyon', temerrut: '💥 Dış borç krizi' };
+  const OUTCOME = { secim_zafer: '🏆 Seçim zaferi', secim_yenilgi: '🗳️ Seçim yenilgisi', istifa: '📢 İstifa', hiper: '☢️ Hiperenflasyon', temerrut: '💥 Dış borç krizi', isgal: '💀 İşgal' };
   function scoreTableHtml(highlightId, limit) {
     const list = loadScores().slice(0, limit || 10);
     if (!list.length) return '<p class="note">Henüz tamamlanmış oyun yok. İlk rekoru siz kırın!</p>';
@@ -455,7 +534,16 @@
   // ============ Yardımcılar ============
   function toast(text, cls) { if (!text) return; if (cls === 'bad') Sound.play('bad'); else if (cls === 'good') Sound.play('good'); const t = document.createElement('div'); t.className = 'toast ' + (cls || ''); t.textContent = text; $('toasts').appendChild(t); setTimeout(() => t.remove(), 4200); }
   function save() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(G.state)); } catch (e) { /* yoksay */ } }
-  function load() { try { const s = JSON.parse(localStorage.getItem(SAVE_KEY)); return s && s.history ? s : null; } catch (e) { return null; } }
+  function load() {
+    try {
+      const s = JSON.parse(localStorage.getItem(SAVE_KEY)); if (!s || !s.history) return null;
+      // eski kayıtlar: savaş alanları
+      if (s.policy.defense === undefined) { s.policy.defense = 2; s.policy.rnd = 0.5; s.prevPolicy.defense = 2; s.prevPolicy.rnd = 0.5; }
+      if (s.defense === undefined) { s.defense = 35; s.tech = 30; }
+      if (s.war === undefined) s.war = null; if (!s.warHistory) s.warHistory = [];
+      return s;
+    } catch (e) { return null; }
+  }
 
   window.Game = G;
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();

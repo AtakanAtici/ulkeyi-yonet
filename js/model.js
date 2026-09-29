@@ -29,20 +29,20 @@
     zor: { label: 'Zor', shockProb: 0.17, shockMult: 1.0, desc: 'Sık ve sert şoklar. Uzmanlar için.' },
   };
 
-  const BASE_FISCAL = { directTax: 18, indirectTax: 18, spendCurrent: 22, invest: 5, transfers: 8 };
+  const BASE_FISCAL = { directTax: 18, indirectTax: 18, spendCurrent: 20, invest: 5, transfers: 8, defense: 2, rnd: 0.5 };
 
   const SCENARIOS = [
     {
       id: 'sakin', title: 'Sakin Sular', tag: 'Kolay', icon: '🌤️', year: 2030, month: 1,
       desc: 'Enflasyon tek hanede, büyüme dengeli, halk iyimser. Bu istikrarı dört yıl boyunca koruyabilir misiniz? Sürprizler yine de kapıda olabilir.',
       gdpUsd: 1000, breadBase: 5,
-      state: { infl: 8.0, core: 7.5, exp: 8.0, target: 5, growth: 4.0, potential: 4.0, unemp: 9.0, fx: 20, reserves: 140, cds: 240, globalRate: 2.5, debt: 35, ca: -2.0, cred: 60, rate: 12, rr: 8, rrFx: 15 },
+      state: { infl: 8.0, core: 7.5, exp: 8.0, target: 5, growth: 4.0, potential: 4.0, unemp: 9.0, fx: 20, reserves: 140, cds: 240, globalRate: 2.5, debt: 35, ca: -2.0, cred: 60, rate: 12, rr: 8, rrFx: 15, defense: 40, tech: 42 },
     },
     {
       id: 'kaynak', title: 'Kaynak Laneti', tag: 'Kolay', icon: '🛢️', year: 2029, month: 3,
       desc: 'Petrol ve gaz geliri kasayı doldurdu: rezerv dev, cari fazla var, borç yok. Ama sanayi cılız, gençler işsiz ve herkes devletten maaş bekliyor. Zenginliği kalıcı büyümeye çevirin.',
       gdpUsd: 600, breadBase: 4,
-      state: { infl: 6.5, core: 6.0, exp: 7.0, target: 4, growth: 1.5, potential: 2.5, unemp: 14.0, fx: 8, reserves: 320, cds: 160, globalRate: 3.0, debt: 12, ca: 5.0, cred: 55, rate: 9, rr: 6, rrFx: 10 },
+      state: { infl: 6.5, core: 6.0, exp: 7.0, target: 4, growth: 1.5, potential: 2.5, unemp: 14.0, fx: 8, reserves: 320, cds: 160, globalRate: 3.0, debt: 12, ca: 5.0, cred: 55, rate: 9, rr: 6, rrFx: 10, defense: 30, tech: 18 },
       policy: { spendCurrent: 25, transfers: 10, invest: 3 },
     },
     {
@@ -76,7 +76,7 @@
       id: 'kriz2001', title: '2001: Kara Şubat', tag: 'Çok Zor', icon: '💥', year: 2001, month: 3,
       desc: 'Sabit kur çöktü, bankalar battı, gecelik faiz binlerce puanı gördü. Rezerv yok, güven yok, borç dağ gibi. Elinizde IMF telefonu ve öfkeli bir halk var. Ekonomiyi küllerinden yeniden kurun.',
       gdpUsd: 200, breadBase: 0.15,
-      state: { infl: 55.0, core: 50.0, exp: 62.0, target: 20, growth: -5.5, potential: 4.5, unemp: 9.0, fx: 1.0, reserves: 22, cds: 950, globalRate: 5.0, debt: 75, ca: 0.5, cred: 18, rate: 60, rr: 6, rrFx: 11 },
+      state: { infl: 55.0, core: 50.0, exp: 62.0, target: 20, growth: -5.5, potential: 4.5, unemp: 9.0, fx: 1.0, reserves: 22, cds: 950, globalRate: 5.0, debt: 75, ca: 0.5, cred: 18, rate: 60, rr: 6, rrFx: 11, defense: 45, tech: 22 },
       shocks: [{ growth: -1.5, months: 4 }, { cds: 100, months: 3 }],
       firstEvent: 'banka',
     },
@@ -84,7 +84,7 @@
       id: 'hiper', title: 'Hiperenflasyon Eşiği', tag: 'Çok Zor', icon: '☢️', year: 2028, month: 6,
       desc: 'Fiyatlar her ay %7 artıyor, maaşlar aynı hafta eriyor, dükkânlar etiket basmaya yetişemiyor. Bir yanlış adımda para birimi kâğıt olur. Beklentileri kırmadan bu iş bitmez.',
       gdpUsd: 500, breadBase: 60,
-      state: { infl: 88.0, core: 80.0, exp: 95.0, target: 15, growth: 1.5, potential: 3.5, unemp: 12.5, fx: 140, reserves: 35, cds: 780, globalRate: 3.5, debt: 58, ca: -3.5, cred: 12, rate: 55, rr: 10, rrFx: 25 },
+      state: { infl: 88.0, core: 80.0, exp: 95.0, target: 15, growth: 1.5, potential: 3.5, unemp: 12.5, fx: 140, reserves: 35, cds: 780, globalRate: 3.5, debt: 58, ca: -3.5, cred: 12, rate: 55, rr: 10, rrFx: 25, defense: 25, tech: 20 },
       shocks: [{ infl: 0.6, months: 3 }],
       policy: { transfers: 10, indirectTax: 16 },
     },
@@ -126,8 +126,9 @@
       support: 55, anger: 35, moods: {},
       policy: {
         rate: s.rate, rr: s.rr, rrFx: s.rrFx, comm: 0, guidance: 'belirsiz', intervention: 0, creditStd: 0,
-        directTax: 18, indirectTax: 18, spendCurrent: 22, invest: 5, transfers: 8, minWageRaise: null,
+        directTax: 18, indirectTax: 18, spendCurrent: 20, invest: 5, transfers: 8, defense: 2, rnd: 0.5, minWageRaise: null,
       },
+      defense: s.defense !== undefined ? s.defense : 35, tech: s.tech !== undefined ? s.tech : 30, war: null, warHistory: [],
       prevPolicy: null, programs: {}, shocks: [], flags: {}, history: [], events: [], newsLog: [],
       gameOver: null, score: 0, lastReport: null,
     };
@@ -159,7 +160,7 @@
     state.realRate = p.rate - state.exp;
     const effRate = 0.25 * p.rate + 3; // borç üzerindeki ortalama faiz
     state.interest = state.debt * effRate / 100;
-    const spending = p.spendCurrent + p.invest + p.transfers + programCost(state);
+    const spending = p.spendCurrent + p.invest + p.transfers + p.defense + p.rnd + programCost(state);
     const taxes = p.directTax + p.indirectTax;
     state.primary = taxes - spending;
     state.deficit = spending + state.interest - taxes; // % GSYH
@@ -174,7 +175,7 @@
       turn: state.turn, label: `${MONTHS[state.month - 1].slice(0, 3)} ${String(state.year).slice(2)}`,
       infl: state.infl, core: state.core, exp: state.exp, growth: state.growth, unemp: state.unemp,
       fx: state.fx, reserves: state.reserves, cds: state.cds, debt: state.debt, deficit: state.deficit,
-      cred: state.cred, support: state.support, rate: state.policy.rate, ca: state.ca, anger: state.anger,
+      cred: state.cred, support: state.support, rate: state.policy.rate, ca: state.ca, anger: state.anger, defense: state.defense, tech: state.tech,
     });
     if (state.history.length > 120) state.history.shift();
   }
@@ -214,6 +215,9 @@
     if (state.growth > 6) n.push(`Fabrikalar tam kapasite: ihracat siparişleri arttı.`);
     if (state.growth < 0) n.push(`Ekonomi daralıyor; sanayi üretimi geriledi, kepenkler kapanıyor.`);
     if (state.deficit > 7) n.push(`Bütçe açığı büyüyor: Hazine borçlanma programını yeniledi.`);
+    if (state.defense > 65) n.push('Savunma sanayii fuarında yerli sistemler ilgi gördü: caydırıcılık artıyor.');
+    if (state.tech > 60) n.push('Teknoloji ihracatı rekor kırdı; yazılım şirketleri yurt dışından sipariş alıyor.');
+    if (state.flags.tension) n.push('Sınırda tatbikat: komşu ülke birliklerini yığıyor, diplomatlar temas hâlinde.');
     if (state.cred > 70) n.push(`Yabancı bankalar raporu: "Politika güvenilirliği geri geldi."`);
     if (p.comm === 1) n.push(`Başkan'ın şahin açıklaması manşetlerde: "Enflasyonla mücadelede taviz yok."`);
     if (p.comm === -1) n.push(`Güvercin mesajlar piyasada tartışılıyor: "Erken gevşeme riski" uyarısı.`);
@@ -256,6 +260,7 @@
     // ---------- 1. Temel değişkenler ----------
     const fiscalImpulse = 0.6 * (p.spendCurrent - BASE_FISCAL.spendCurrent) + 1.0 * (p.invest - BASE_FISCAL.invest)
       + 0.8 * (p.transfers - BASE_FISCAL.transfers) - 0.5 * (p.directTax - BASE_FISCAL.directTax) - 0.4 * (p.indirectTax - BASE_FISCAL.indirectTax)
+      + 0.4 * (p.defense - BASE_FISCAL.defense) + 0.6 * (p.rnd - BASE_FISCAL.rnd)
       + (state.programs.konut ? 0.8 : 0) + (state.programs.istihdam ? 0.3 : 0) + (state.programs.tasarruf ? -0.3 : 0);
     const realRate = p.rate - state.exp;
     const neutralReal = 3;
@@ -274,7 +279,8 @@
     state.growth += 0.22 * (gTarget - state.growth) + rng.noise(0.15);
     state.growth = clamp(state.growth, -12, 14);
     state.gap = state.gap * 0.96 + (state.growth - state.potential) / 12;
-    state.potential += 0.012 * (p.invest - 5) / 12 + (state.programs.konut ? 0.005 : 0);
+    state.potential += 0.012 * (p.invest - 5) / 12 + (state.programs.konut ? 0.005 : 0) + 0.004 * (state.tech - 30) / 12;
+    if (global.War) War.accumulate(state);
     state.potential = clamp(state.potential, 1.5, 6.5);
 
     // İşsizlik
@@ -366,6 +372,10 @@
     const angerTarget = 100 - state.support + inflSurprise + (state.unemp > 12 ? 8 : 0);
     state.anger = clamp(state.anger + 0.3 * (angerTarget - state.anger), 0, 100);
 
+    // ---------- 2b. Savaş ----------
+    let warResult = null;
+    if (state.war && state.war.active && global.War) { warResult = War.step(state, rng, diff); state.infl = clamp(state.infl, 0.5, 250); state.cred = clamp(state.cred, 0, 100); }
+
     // ---------- 3. Zaman ----------
     state.turn++;
     state.month++;
@@ -385,7 +395,8 @@
     d.rate = dRate;
     const news = makeNews(state, d);
     state.newsLog = news.concat(state.newsLog).slice(0, 12);
-    state.lastReport = { before, after, delta: d, notes, news, turn: state.turn };
+    if (state.war && state.war.active) news.unshift(`Cephe: ${state.war.front > 15 ? 'ordumuz ilerliyor' : state.war.front < -15 ? 'düşman baskısı artıyor' : 'çatışmalar sürüyor'}. Kayıplar ${Math.round(state.war.casualties)} bin.`);
+    state.lastReport = { before, after, delta: d, notes, news, turn: state.turn, war: warResult };
     return state.lastReport;
   }
 
@@ -414,7 +425,7 @@
     if (s.support < 15 && s.turn >= 6) s.gameOver = { type: 'istifa', title: 'Halk sokağa döküldü', text: 'Kamuoyu desteği çöktü. Meydanlar doldu, koalisyon dağıldı ve istifanız istendi. Görev süreniz erken bitti.' };
     else if (s.infl > 150) s.gameOver = { type: 'hiper', title: 'Hiperenflasyon', text: 'Fiyatlar kontrolden çıktı. Para birimine güven kalmadı; ekonomi dolarize oldu. Yönetim el değiştirdi.' };
     else if (s.reserves < -20) s.gameOver = { type: 'temerrut', title: 'Dış borç krizi', text: 'Rezervler tükendi, ithalat durdu, IMF kapısı çalındı. Ekonomi yönetimi görevden alındı.' };
-    else if (s.turn >= s.termMonths) {
+    else if (s.turn >= s.termMonths && !(s.war && s.war.active)) {
       const won = s.support >= 50;
       s.gameOver = { type: won ? 'secim_zafer' : 'secim_yenilgi', title: won ? 'Seçim Zaferi!' : 'Seçimi kaybettiniz',
         text: won ? 'Dört yılın sonunda halk sizi yeniden seçti. İstikrar programınız tarihe geçti.' : 'Dört yıl doldu ama halkın çoğunluğu değişim istedi. Yine de bıraktığınız miras önemli.' };

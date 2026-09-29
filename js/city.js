@@ -44,6 +44,7 @@
       this.bubble = null; this.hover = null; this.buildings = [];
       this.signs = ['ZAM İSTİYORUZ'];
       this.priceTag = { flash: 0 };
+      this.war = null; this.wasWar = false; this.planes = []; this.bombs = []; this.explosions = []; this.scorch = []; this.tracers = []; this.damage = {}; this.fire = []; this.sirenT = 0; this.planeT = 2;
       this.resize();
       window.addEventListener('resize', () => this.resize());
       canvas.addEventListener('mousemove', e => this.onMove(e));
@@ -99,6 +100,11 @@
       }
       this.signs = global.Voices ? Voices.pickSigns(state) : ['ZAM İSTİYORUZ'];
       if (first) this.spawnAgents();
+      this.occupied = !!(state.gameOver && state.gameOver.type === 'isgal');
+      if (this.occupied && !this.occupiedShown) { this.occupiedShown = true; for (let i = 0; i < 6; i++) { const b = this.buildings[Math.floor(Math.random() * this.buildings.length)]; if (b.t !== 'tree') this.fire.push({ x: b.x + 8 + Math.random() * (b.w - 16), y: this.gy - Math.random() * this.bHeight(b) * 0.8, ttl: 9999 }); } this.cars.forEach(c => c.tank = true); }
+      this.war = state.war && state.war.active ? state.war : null;
+      if (this.war && !this.wasWar) this.startWar(); else if (!this.war && this.wasWar) this.endWar();
+      this.wasWar = !!this.war;
       this.assignRoles();
     }
 
@@ -130,6 +136,8 @@
         a.targetX = meclis ? meclis.x + 14 + hash(a.id + 31) * (meclis.w - 28) : this.W / 2;
         a.sign = this.signs[a.id % this.signs.length];
       }
+      this.agents.forEach(a => a.soldier = false);
+      if (this.war && this.war.mobilized) { const pool = this.agents.filter(a => a.state === 'walk' && (a.seg === 'genc' || a.seg === 'isci')).slice(0, 7); pool.forEach(a => a.soldier = true); }
       let placed = 0;
       for (let i = nProt; i < sorted.length && placed < nSit; i++) {
         const a = sorted[i];
@@ -165,6 +173,65 @@
     float(text, x, y, color) { const n = this.floaters.filter(f => Math.abs(f.x - x) < 60).length; this.floaters.push({ text, x, y: y - n * 16, ttl: 2.6, color: color || '#fff' }); }
     floatAt(type, text, color) { const b = this.buildings.find(b => b.t === type); if (b) this.float(text, b.x + b.w / 2, this.gy - this.bHeight(b) - 10, color); }
 
+    // ---------- savaş ----------
+    startWar() {
+      this.planes = []; this.bombs = []; this.explosions = []; this.tracers = []; this.damage = {}; this.fire = []; this.planeT = 1.5; this.sirenT = 0;
+      this.opts.onSound && this.opts.onSound('siren');
+      this.floatAt('meclis', '⚠️ HAVA SALDIRISI', '#fca5a5');
+    }
+    endWar() { this.planes = []; this.bombs = []; this.tracers = []; this.scorchFade = 25; this.cars.forEach(c => c.tank = false); }
+    updateWar(dt) {
+      const s = this.state, w = this.war, W = this.W, gy = this.gy;
+      const defense = s.defense / 100;
+      const pressure = Math.max(0.15, (w.enemy - (w.power || War.power(s))) / 60 + 0.5); // 0.15..1.5
+      // siren
+      this.sirenT -= dt; if (this.sirenT <= 0) { this.sirenT = 22 + Math.random() * 15; this.opts.onSound && this.opts.onSound('siren'); }
+      // uçaklar
+      this.planeT -= dt;
+      if (this.planeT <= 0) {
+        this.planeT = (4.5 - pressure * 1.6) + Math.random() * 3;
+        const dir = Math.random() > 0.5 ? 1 : -1;
+        this.planes.push({ x: dir > 0 ? -70 : W + 70, dir, y: 24 + Math.random() * 40, speed: 130 + Math.random() * 60, dropX: 60 + Math.random() * (W - 120), dropped: false, bombs: 1 + (Math.random() < pressure * 0.5 ? 1 : 0) });
+        this.opts.onSound && this.opts.onSound('plane');
+      }
+      this.planes.forEach(p => {
+        p.x += p.dir * p.speed * dt;
+        if (!p.dropped && ((p.dir > 0 && p.x >= p.dropX) || (p.dir < 0 && p.x <= p.dropX))) {
+          p.dropped = true;
+          for (let i = 0; i < p.bombs; i++) {
+            const intercept = Math.random() < defense * 0.85;
+            this.bombs.push({ x: p.x + i * 26 * p.dir, y: p.y + 8, vx: p.dir * p.speed * 0.5, vy: 30, intercept, hitY: intercept ? gy * (0.35 + Math.random() * 0.25) : gy + 4 + Math.random() * 16 });
+          }
+        }
+      });
+      this.planes = this.planes.filter(p => p.x > -120 && p.x < W + 120);
+      // bombalar
+      const meclis = this.buildings.find(b => b.t === 'meclis'); const aaX = meclis ? meclis.x + meclis.w - 10 : W / 2;
+      this.bombs.forEach(b => {
+        b.vy += 110 * dt; b.y += b.vy * dt; b.x += b.vx * dt * 0.6;
+        if (b.y >= b.hitY) {
+          b.dead = true;
+          if (b.intercept) {
+            this.explosions.push({ x: b.x, y: b.y, r: 4, max: 22, ttl: 0.5, air: true });
+            this.tracers.push({ x1: aaX, y1: gy - (meclis ? this.bHeight(meclis) : 60), x2: b.x, y2: b.y, ttl: 0.35 });
+            this.opts.onSound && this.opts.onSound('flak');
+            this.float('✔ ÖNLENDİ', b.x, b.y - 10, '#86efac');
+          } else {
+            this.explosions.push({ x: b.x, y: b.y, r: 6, max: 46, ttl: 0.9, air: false });
+            this.scorch.push({ x: b.x, y: Math.min(b.y, gy + 22), a: 1 });
+            this.opts.onSound && this.opts.onSound('boom');
+            this.shake = 0.35;
+            // halk kaçışır
+            this.agents.forEach(a => { const d = Math.abs(a.x - b.x); if (d < 110) { a.flee = { dir: a.x < b.x ? -1 : 1, ttl: 2.2 + Math.random() }; a.mood = Math.max(0, a.mood - 8); a.emote = { t: '😱', ttl: 1.5 }; } });
+            // bina hasarı
+            this.buildings.forEach((bd, i) => { if (bd.t !== 'tree' && Math.abs(bd.x + bd.w / 2 - b.x) < bd.w / 2 + 30) { this.damage[i] = Math.min(3, (this.damage[i] || 0) + 1); if (Math.random() < 0.6) this.fire.push({ bi: i, x: bd.x + 8 + Math.random() * (bd.w - 16), y: gy - Math.random() * this.bHeight(bd) * 0.8, ttl: 20 + Math.random() * 20 }); } });
+            if (this.bubble) this.bubble = null;
+          }
+        }
+      });
+      this.bombs = this.bombs.filter(b => !b.dead);
+    }
+
     // ---------- güncelleme ----------
     frame(t) {
       const dt = Math.min(0.05, (t - this.last) / 1000); this.last = t; this.time += dt;
@@ -176,12 +243,23 @@
     update(dt) {
       const s = this.state; if (!s) return;
       const W = this.W;
+      if (this.war) this.updateWar(dt);
+      this.explosions.forEach(e => { e.ttl -= dt; e.r += (e.max - e.r) * dt * 6; });
+      this.explosions = this.explosions.filter(e => e.ttl > 0);
+      this.tracers.forEach(t => t.ttl -= dt); this.tracers = this.tracers.filter(t => t.ttl > 0);
+      this.fire.forEach(f => f.ttl -= dt); this.fire = this.fire.filter(f => f.ttl > 0);
+      if (!this.war && this.scorch.length) { this.scorch.forEach(sc => sc.a -= dt / 25); this.scorch = this.scorch.filter(sc => sc.a > 0); }
+      if (this.shake > 0) this.shake -= dt;
       // vatandaşlar
       this.agents.forEach(a => {
         const target = clamp(s.moods[a.seg] + a.moodOff, 0, 100);
         a.mood += (target - a.mood) * dt * 0.5;
         a.phase += dt * 7;
-        if (a.state === 'walk') {
+        if (a.flee) {
+          a.flee.ttl -= dt; a.dir = a.flee.dir; a.x += a.dir * a.speed * 3.2 * dt;
+          if (a.x < -10) a.x = W + 10; if (a.x > W + 10) a.x = -10;
+          if (a.flee.ttl <= 0) a.flee = null;
+        } else if (a.state === 'walk') {
           if (a.idle > 0) a.idle -= dt; else {
             a.x += a.dir * a.speed * dt * (0.8 + a.depth * 0.4);
             if (a.x < -10) { a.x = W + 10; } if (a.x > W + 10) { a.x = -10; }
@@ -208,6 +286,7 @@
       const nCars = clamp(Math.round(2 + s.growth * 0.7 - (s.unemp - 8) * 0.3), 1, 9);
       while (this.cars.length < nCars) this.cars.push({ x: Math.random() * W, dir: Math.random() > 0.5 ? 1 : -1, speed: 40 + Math.random() * 40, color: ['#d94f4f', '#4f7ad9', '#e8b93b', '#e8e8e8', '#4fa66b', '#8e5bd9'][Math.floor(Math.random() * 6)], lane: Math.random() > 0.5 ? 0 : 1 });
       if (this.cars.length > nCars) this.cars.length = nCars;
+      const mob = this.war && this.war.mobilized; this.cars.forEach((c, i) => { c.tank = mob && i % 2 === 0; });
       this.cars.forEach(c => { c.x += c.dir * c.speed * dt; if (c.x > W + 40) c.x = -40; if (c.x < -40) c.x = W + 40; });
       // duman
       const f = this.buildings.find(b => b.t === 'factory');
@@ -245,6 +324,8 @@
     draw() {
       const ctx = this.ctx, W = this.W, H = this.H, gy = this.gy, s = this.state;
       const night = nightness(this.tod);
+      ctx.save();
+      if (this.shake > 0) ctx.translate((Math.random() - 0.5) * 8 * this.shake, (Math.random() - 0.5) * 6 * this.shake);
       const [top, bot] = skyColors(this.tod);
       const g = ctx.createLinearGradient(0, 0, 0, gy); g.addColorStop(0, top); g.addColorStop(1, bot);
       ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
@@ -257,12 +338,16 @@
       if (night > 0.1) { ctx.fillStyle = '#f3f1d8'; ctx.beginPath(); ctx.arc(mx, my, 12, 0, TAU); ctx.fill(); ctx.fillStyle = top; ctx.beginPath(); ctx.arc(mx + 5, my - 3, 10, 0, TAU); ctx.fill(); }
       // bulutlar
       this.clouds.forEach(c => { ctx.fillStyle = `rgba(255,255,255,${0.85 - night * 0.6})`; const cx = c.x * W, cy = c.y * gy, r = 14 * c.s; [[0, 0, r], [r * 1.1, -r * 0.3, r * 0.8], [-r * 1.1, -r * 0.1, r * 0.7], [r * 0.4, -r * 0.8, r * 0.7]].forEach(([dx, dy, rr]) => { ctx.beginPath(); ctx.arc(cx + dx, cy + dy, rr, 0, TAU); ctx.fill(); }); });
+      if (this.war) { ctx.fillStyle = 'rgba(140,40,20,0.22)'; ctx.fillRect(-10, -10, W + 20, gy + 10); }
+      if (this.occupied) { ctx.fillStyle = 'rgba(90,10,10,0.45)'; ctx.fillRect(-10, -10, W + 20, H + 20); }
+      // uçaklar
+      this.planes.forEach(p => this.drawPlane(p));
       // tepeler
       const hillC = this.season === 'kis' ? '#dfe6ea' : (this.season === 'sonbahar' ? '#b9a06a' : '#8fc27a');
       ctx.fillStyle = mix(hillC.length === 7 ? hillC : '#8fc27a', '#1b2a45', night * 0.6);
       ctx.beginPath(); ctx.moveTo(0, gy); for (let x = 0; x <= W; x += 10) { const y = gy - 28 - 18 * Math.sin(x / 90) - 10 * Math.sin(x / 37 + 2); ctx.lineTo(x, y); } ctx.lineTo(W, gy); ctx.closePath(); ctx.fill();
       // binalar
-      this.buildings.forEach(b => this.drawBuilding(b, night));
+      this.buildings.forEach((b, i) => { this.drawBuilding(b, night); this.drawDamage(b, i); if (this.occupied && b.t !== 'tree' && i % 2 === 0) this.drawEnemyFlag(b.x + b.w - 8, gy - this.bHeight(b)); });
       // duman
       this.smoke.forEach(p => { ctx.fillStyle = `rgba(120,120,130,${0.35 * p.ttl / 4})`; ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, TAU); ctx.fill(); });
       // zemin: kaldırım + yol
@@ -272,12 +357,19 @@
       ctx.fillStyle = mix('#5a5d66', '#15161c', night * 0.6); ctx.fillRect(0, gy + 26, W, 3);
       ctx.strokeStyle = 'rgba(255,230,120,.7)'; ctx.setLineDash([14, 12]); ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(0, gy + 47); ctx.lineTo(W, gy + 47); ctx.stroke(); ctx.setLineDash([]);
       ctx.fillStyle = mix('#a8b596', '#1b2030', night * 0.6); ctx.fillRect(0, gy + 68, W, H - gy - 68);
+      // yanık izleri
+      this.scorch.forEach(sc => { ctx.fillStyle = `rgba(30,25,20,${0.55 * sc.a})`; ctx.beginPath(); ctx.ellipse(sc.x, sc.y, 22, 6, 0, 0, TAU); ctx.fill(); });
       // banklar
       this.benches.forEach(bx => { ctx.fillStyle = mix('#8b5a2b', '#2b1d12', night * 0.6); ctx.fillRect(bx - 14, gy + 10, 28, 4); ctx.fillRect(bx - 12, gy + 14, 3, 6); ctx.fillRect(bx + 9, gy + 14, 3, 6); });
       // arabalar (kaldırımın arkasında değil, yolda)
       this.cars.forEach(c => this.drawCar(c, night));
       // vatandaşlar (derinliğe göre)
       this.agents.slice().sort((a, b) => a.depth - b.depth).forEach(a => this.drawAgent(a, night));
+      // yangınlar, bombalar, izleyici mermiler, patlamalar
+      this.fire.forEach(f => { const fl = 0.7 + Math.random() * 0.5; ctx.fillStyle = `rgba(255,${120 + Math.random() * 80 | 0},30,0.85)`; ctx.beginPath(); ctx.ellipse(f.x, f.y - 6 * fl, 5, 9 * fl, 0, 0, TAU); ctx.fill(); ctx.fillStyle = 'rgba(80,80,80,0.35)'; ctx.beginPath(); ctx.arc(f.x + Math.sin(this.time * 2 + f.x) * 4, f.y - 22 - (this.time * 10 % 30), 7, 0, TAU); ctx.fill(); });
+      this.bombs.forEach(b => { ctx.fillStyle = '#2b2b2b'; ctx.beginPath(); ctx.ellipse(b.x, b.y, 3, 6, Math.atan2(b.vy, b.vx) - Math.PI / 2, 0, TAU); ctx.fill(); ctx.fillStyle = '#b91c1c'; ctx.fillRect(b.x - 1.5, b.y - 8, 3, 3); });
+      this.tracers.forEach(t => { ctx.strokeStyle = `rgba(255,230,120,${t.ttl * 2.5})`; ctx.lineWidth = 1.5; ctx.setLineDash([6, 5]); ctx.beginPath(); ctx.moveTo(t.x1, t.y1); ctx.lineTo(t.x2, t.y2); ctx.stroke(); ctx.setLineDash([]); });
+      this.explosions.forEach(e => { const k = e.ttl / (e.air ? 0.5 : 0.9); ctx.globalAlpha = Math.min(1, k * 1.4); const g = ctx.createRadialGradient(e.x, e.y, 1, e.x, e.y, e.r); g.addColorStop(0, '#fff7c2'); g.addColorStop(0.35, '#ff9a2e'); g.addColorStop(0.75, e.air ? '#9ca3af' : '#c2410c'); g.addColorStop(1, 'rgba(60,40,30,0)'); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(e.x, e.y, e.r, 0, TAU); ctx.fill(); if (!e.air) { ctx.fillStyle = `rgba(70,60,55,${0.5 * k})`; for (let i = 0; i < 4; i++) { ctx.beginPath(); ctx.arc(e.x + Math.cos(i * 1.6) * e.r * 0.6, e.y - e.r * (1 - k) * 1.5 - i * 6, e.r * 0.45, 0, TAU); ctx.fill(); } } ctx.globalAlpha = 1; });
       // yağış
       if (this.drops.length) { ctx.strokeStyle = this.season === 'kis' ? 'rgba(255,255,255,.9)' : 'rgba(180,200,240,.6)'; ctx.lineWidth = this.season === 'kis' ? 2.5 : 1; this.drops.forEach(d => { ctx.beginPath(); ctx.moveTo(d.x, d.y); ctx.lineTo(d.x + (this.season === 'kis' ? 0 : 1), d.y + (this.season === 'kis' ? 0.1 : 8)); ctx.stroke(); }); }
       // gece karartma
@@ -288,6 +380,22 @@
       if (this.bubble) this.drawBubble(this.bubble);
       // hover vurgusu
       if (this.hover && this.hover.building) { const b = this.hover.building; ctx.strokeStyle = 'rgba(255,255,255,.8)'; ctx.lineWidth = 2; ctx.setLineDash([4, 3]); ctx.strokeRect(b.x - 2, gy - this.bHeight(b) - 2, b.w + 4, this.bHeight(b) + 4); ctx.setLineDash([]); }
+      ctx.restore();
+    }
+
+    drawEnemyFlag(x, y) {
+      const ctx = this.ctx; ctx.fillStyle = '#222'; ctx.fillRect(x, y - 26, 2, 26);
+      ctx.fillStyle = '#111'; ctx.beginPath(); ctx.moveTo(x + 2, y - 26); for (let i = 0; i <= 12; i++) ctx.lineTo(x + 2 + i * 1.4, y - 26 + Math.sin(this.time * 6 + i * 0.6) * 1.2); ctx.lineTo(x + 19, y - 16); ctx.lineTo(x + 2, y - 16); ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = '#b91c1c'; ctx.lineWidth = 1.5; ctx.strokeRect(x + 3, y - 25, 14, 8);
+    }
+
+    drawPlane(p) {
+      const ctx = this.ctx; const d = p.dir;
+      ctx.fillStyle = '#3a3f4a';
+      ctx.beginPath(); ctx.moveTo(p.x + 22 * d, p.y); ctx.lineTo(p.x - 18 * d, p.y - 4); ctx.lineTo(p.x - 22 * d, p.y - 9); ctx.lineTo(p.x - 16 * d, p.y); ctx.lineTo(p.x - 22 * d, p.y + 6); ctx.lineTo(p.x - 16 * d, p.y + 4); ctx.closePath(); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(p.x + 2 * d, p.y - 1); ctx.lineTo(p.x - 10 * d, p.y - 14); ctx.lineTo(p.x - 4 * d, p.y - 1); ctx.closePath(); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(p.x + 2 * d, p.y + 1); ctx.lineTo(p.x - 10 * d, p.y + 12); ctx.lineTo(p.x - 4 * d, p.y + 1); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = '#b91c1c'; ctx.fillRect(p.x - 12 * d - 2, p.y - 3, 4, 4);
     }
 
     drawWindows(b, x, y, w, h, cols, rows, night, activity) {
@@ -337,6 +445,7 @@
           ctx.fillStyle = dark('#efe9dc'); for (let i = 0; i < 7; i++) ctx.fillRect(x + 8 * sc + i * (w - 16 * sc) / 6 - 3 * sc, y + 30 * sc, 6 * sc, h - 34 * sc);
           ctx.fillStyle = dark('#4a3b30'); ctx.fillRect(x + w / 2 - 10 * sc, gy - 22 * sc, 20 * sc, 22 * sc);
           ctx.fillStyle = '#5b3a2e'; ctx.fillRect(x + w / 2 - 36 * sc, y + 4 * sc, 72 * sc, 12 * sc); ctx.fillStyle = '#fff'; ctx.fillText('MECLİS', x + w / 2, y + 10 * sc);
+          if (this.war && this.war.mobilized) { ctx.fillStyle = '#b91c1c'; ctx.fillRect(x + w / 2 - 44 * sc, y + 24 * sc, 88 * sc, 12 * sc); ctx.fillStyle = '#fff'; ctx.fillText('SEFERBERLİK', x + w / 2, y + 30 * sc); }
           // bayrak
           const fx = x + w - 10 * sc, fy = y - 30 * sc; ctx.fillStyle = dark('#888'); ctx.fillRect(fx, fy, 2, 30 * sc + 20 * sc);
           ctx.fillStyle = '#d7263d'; ctx.beginPath(); ctx.moveTo(fx + 2, fy); for (let i = 0; i <= 20; i++) { const px = fx + 2 + i * 1.1 * sc, py = fy + Math.sin(this.time * 6 + i * 0.5) * 1.5; ctx.lineTo(px, py); } ctx.lineTo(fx + 24 * sc, fy + 14 * sc); ctx.lineTo(fx + 2, fy + 14 * sc); ctx.closePath(); ctx.fill();
@@ -393,8 +502,17 @@
       }
     }
 
+    drawDamage(b, i) {
+      const d = this.damage[i]; if (!d) return; const ctx = this.ctx, gy = this.gy, h = this.bHeight(b), x = b.x, w = b.w, y = gy - h;
+      ctx.strokeStyle = 'rgba(20,15,10,0.75)'; ctx.lineWidth = 1.5;
+      for (let k = 0; k < d * 2; k++) { const sx = x + hash(i * 7 + k) * w, sy = y + hash(i * 13 + k) * h * 0.8; ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(sx + 6, sy + 10); ctx.lineTo(sx + 2, sy + 18); ctx.lineTo(sx + 9, sy + 27); ctx.stroke(); }
+      ctx.fillStyle = `rgba(40,35,30,${0.15 * d})`; ctx.fillRect(x, y, w, h);
+      if (d >= 3) { ctx.fillStyle = '#e0a92e'; ctx.font = 'bold 8px Nunito, system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.fillText('HASARLI', x + w / 2, y - 6); }
+    }
+
     drawCar(c, night) {
       const ctx = this.ctx; const y = this.gy + 30 + c.lane * 20; const w = 30, h = 12;
+      if (c.tank) { ctx.fillStyle = mix('#4b6b3a', '#111', night * 0.4); ctx.fillRect(c.x - 18, y - 2, 36, 12); ctx.fillRect(c.x - 9, y - 10, 16, 8); ctx.fillRect(c.x + (c.dir > 0 ? 7 : -25), y - 7, 18, 2.5); ctx.fillStyle = '#222'; ctx.fillRect(c.x - 19, y + 8, 38, 5); for (let k = -14; k <= 14; k += 7) { ctx.beginPath(); ctx.arc(c.x + k, y + 10, 3, 0, TAU); ctx.fill(); } return; }
       ctx.fillStyle = mix(c.color, '#111', night * 0.4); ctx.fillRect(c.x - w / 2, y, w, h);
       ctx.fillRect(c.x - w / 4, y - 6, w / 2, 6);
       ctx.fillStyle = '#222'; ctx.beginPath(); ctx.arc(c.x - 9, y + h, 4, 0, TAU); ctx.arc(c.x + 9, y + h, 4, 0, TAU); ctx.fill();
@@ -413,7 +531,7 @@
       if (seated) { ctx.beginPath(); ctx.moveTo(x - 3, by - 8); ctx.lineTo(x - 3 + a.dir * 6, by - 4); ctx.lineTo(x - 3 + a.dir * 6, by); ctx.moveTo(x + 2, by - 8); ctx.lineTo(x + 2 + a.dir * 6, by - 4); ctx.lineTo(x + 2 + a.dir * 6, by); ctx.stroke(); }
       else { ctx.beginPath(); ctx.moveTo(x - 2, by - 9); ctx.lineTo(x - 2 + swing, by); ctx.moveTo(x + 2, by - 9); ctx.lineTo(x + 2 - swing, by); ctx.stroke(); }
       // gövde
-      ctx.fillStyle = dark(a.seg === 'esnaf' ? '#2f3a55' : a.color);
+      ctx.fillStyle = dark(a.soldier ? '#4b6b3a' : a.seg === 'esnaf' ? '#2f3a55' : a.color);
       roundRect(ctx, x - 5, by - 20, 10, 12, 3); ctx.fill();
       if (a.seg === 'esnaf') { ctx.fillStyle = '#d7263d'; ctx.fillRect(x - 1, by - 19, 2, 8); }
       if (a.seg === 'genc') { ctx.fillStyle = dark('#444'); ctx.fillRect(x - a.dir * 7, by - 19, 4, 9); }
@@ -423,7 +541,8 @@
       const hy = by - 26;
       ctx.fillStyle = a.skin; ctx.beginPath(); ctx.arc(x, hy, 5.5, 0, TAU); ctx.fill();
       // saç / şapka
-      switch (a.seg) {
+      if (a.soldier) { ctx.fillStyle = '#4b6b3a'; ctx.beginPath(); ctx.arc(x, hy - 1, 6.2, Math.PI, TAU); ctx.fill(); ctx.fillRect(x - 7, hy - 1, 14, 2); }
+      switch (a.soldier ? 'asker' : a.seg) {
         case 'isci': ctx.fillStyle = '#f2c230'; ctx.beginPath(); ctx.arc(x, hy - 1, 6, Math.PI, TAU); ctx.fill(); ctx.fillRect(x - 7, hy - 1, 14, 2); break;
         case 'emekli': ctx.fillStyle = '#d9d9d9'; ctx.beginPath(); ctx.arc(x, hy - 2, 5.5, Math.PI, TAU); ctx.fill(); break;
         case 'ciftci': ctx.fillStyle = '#d9b45a'; ctx.fillRect(x - 9, hy - 3, 18, 2); ctx.beginPath(); ctx.arc(x, hy - 3, 5, Math.PI, TAU); ctx.fill(); break;
