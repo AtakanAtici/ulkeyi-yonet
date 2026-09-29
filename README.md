@@ -20,7 +20,7 @@ Kurulum gerektirmez: `index.html` dosyasını çift tıklayarak açmanız yeterl
 - Kaybetme koşulları: destek < 15 (istifa), enflasyon > %150 (hiperenflasyon), rezervler tükenirse (dış borç krizi).
 
 ## Kısayollar
-Boşluk: ayı ilerlet · Shift+Enter: çeyrek sonuna · ↑/↓: faiz ±1 puan
+Enter veya Boşluk: ayı ilerlet (açık pencerede Enter = Devam) · Shift+Enter: çeyrek sonuna · ↑/↓: faiz ±1 puan
 
 ## Dosyalar
 - `js/model.js` — aylık makro model (enflasyon, büyüme, kur, rezerv, CDS, bütçe, halk kesimleri)

@@ -68,9 +68,17 @@
     $('btnSound').textContent = Sound.isMuted() ? '🔇' : '🔊'; $('btnSound').classList.toggle('on', !Sound.isMuted());
     $('policyTabs').addEventListener('click', e => { const b = e.target.closest('button'); if (b) selectTab(b.dataset.tab); });
     document.addEventListener('keydown', e => {
-      if (!G.state || G.state.gameOver || !$('modal').classList.contains('hidden')) return;
-      if (e.target.tagName === 'INPUT') return;
-      if (e.code === 'Space') { e.preventDefault(); advance(1); }
+      const typing = e.target.tagName === 'TEXTAREA' || (e.target.tagName === 'INPUT' && e.target.type !== 'range');
+      const modalOpen = !$('modal').classList.contains('hidden');
+      // Enter: açık pencerede ana düğmeyi tetikle (Devam, İleri, Kararı Açıkla, Göreve Başla)
+      if (e.key === 'Enter' && !e.shiftKey && modalOpen) {
+        if (typing && e.target.id === 'nameInput') { e.target.blur(); e.preventDefault(); return; }
+        const primary = $('modalCard').querySelector('.modal-foot .btn.primary');
+        if (primary) { e.preventDefault(); primary.click(); }
+        return;
+      }
+      if (!G.state || G.state.gameOver || modalOpen || typing) return;
+      if (e.code === 'Space' || (e.key === 'Enter' && !e.shiftKey)) { e.preventDefault(); advance(1); }
       if (e.key === 'Enter' && e.shiftKey) { e.preventDefault(); advance(3 - (G.state.turn % 3) || 3); }
       if (e.key === 'ArrowUp') { e.preventDefault(); setPolicy('rate', G.state.policy.rate + 1); }
       if (e.key === 'ArrowDown') { e.preventDefault(); setPolicy('rate', G.state.policy.rate - 1); }
@@ -397,7 +405,7 @@
   function showMenu() {
     const c = showModal(`<div class="modal-head"><div class="ico">☰</div><div><h2>Menü</h2></div></div><div class="modal-body menu-list">
       <button class="btn light" id="mResume">▶ Oyuna dön</button><button class="btn light" id="mHelp">🎓 Nasıl oynanır?</button><button class="btn light" id="mEvents">📜 Olay günlüğü</button><button class="btn light" id="mScores">🏆 Skor tablosu</button><button class="btn danger" id="mNew">🔄 Yeni oyun (kayıt silinir)</button>
-      <p class="note">Kısayollar: Boşluk = ay ilerlet · Shift+Enter = çeyrek · ↑/↓ = faiz ±1 puan</p></div>`, { closable: true });
+      <p class="note">Kısayollar: Enter veya Boşluk = ay ilerlet · Shift+Enter = çeyrek · ↑/↓ = faiz ±1 puan · Enter = açık penceredeki Devam düğmesi</p></div>`, { closable: true });
     $('mResume').addEventListener('click', closeModal);
     $('mHelp').addEventListener('click', () => showTutorial(0));
     $('mScores').addEventListener('click', () => showScores(showMenu));

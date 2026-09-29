@@ -77,7 +77,7 @@
   const TUTORIAL = [
     { text: 'Hoş geldiniz Başkanım! Ben başekonomistiniz Nilüfer. Görevimiz dört yıl boyunca bu ülkenin ekonomisini yönetmek: enflasyonu hedefe indirmek, işsizliği düşürmek ve halkı yanımızda tutmak.' },
     { text: 'Yukarıdaki şehir gerçek zamanlı: vatandaşların yüzü ekonomiye göre değişir, fabrika bacası büyümeyle tüter, market etiketleri enflasyonla yükselir. Bir vatandaşa tıklarsanız derdini anlatır; binalara tıklarsanız ilgili politikalar açılır.' },
-    { text: 'Sol panelde göstergeler, ortada politika araçları (para, maliye, programlar), sağda halk kesimleri var. Kararlarınızı verip "Ayı İlerlet" deyin. Her çeyrek sonu size rapor sunacağım. Bol şans!' },
+    { text: 'Sol panelde göstergeler, ortada politika araçları (para, maliye, programlar), sağda halk kesimleri var. Kararlarınızı verip "Ayı İlerlet" deyin ya da Enter tuşuna basın. Her çeyrek sonu size rapor sunacağım. Bol şans!' },
   ];
 
   global.Voices = { QUOTES, pickQuote, pickSigns, advisorComment, TUTORIAL };
