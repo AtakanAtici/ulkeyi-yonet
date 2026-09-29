@@ -338,3 +338,21 @@ input[type=range]::-moz-range-track { height: 6px; border-radius: 3px; backgroun
 .occupation svg { display: block; width: 100%; height: auto; }
 .modal-head.grim { background: linear-gradient(180deg, #2a0606, #450a0a); color: #fecaca; border-bottom-color: #7f1d1d; }
 .modal-head.grim .kicker { color: #fca5a5; }
+
+/* ---------- Zafer ---------- */
+.victory { position: relative; margin: 0 0 12px; border-radius: 12px; overflow: hidden; border: 2px solid #b8860b; box-shadow: 0 8px 24px rgba(120,80,0,.3); }
+.victory svg { display: block; width: 100%; height: auto; }
+.confetti { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.confetti i { position: absolute; top: -12px; width: 8px; height: 12px; border-radius: 2px; opacity: .95; animation: confettiFall 3s linear infinite; }
+@keyframes confettiFall { 0% { transform: translateY(-12px) rotate(0deg); } 100% { transform: translateY(240px) rotate(540deg); } }
+.modal-head.gold { background: linear-gradient(180deg, #fff3c4, #fde68a); border-bottom-color: #b8860b; }
+.modal-head.gold .kicker { color: #92400e; }
+.modal-head.gold h2 { color: #7c2d12; }
+@media (prefers-reduced-motion: reduce) { .confetti i { animation: none; display: none; } }
+
+/* ---------- Darbe ---------- */
+.coup-pill { margin: 2px 0 8px; padding: 6px 10px; border-radius: 10px; font-size: 12px; font-weight: 700; border: 1px solid var(--line); background: var(--panel2); }
+.coup-pill.mid { background: #fef3c7; border-color: #f59e0b; }
+.coup-pill.high { background: #fee2e2; border-color: #ef4444; color: #7f1d1d; animation: warPulse 1.2s ease infinite alternate; }
+.coup-scene { margin: 0 0 12px; border-radius: 12px; overflow: hidden; border: 2px solid #1e293b; box-shadow: 0 8px 24px rgba(0,0,20,.35); }
+.coup-scene svg { display: block; width: 100%; height: auto; }

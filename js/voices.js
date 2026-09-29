@@ -64,6 +64,7 @@
     if (s.infl > s.exp + 4) lines.push('Enflasyon beklentilerin üzerinde seyrediyor; güvenilir bir sıkı duruş beklentileri çıpalayabilir.');
     if (d.infl !== undefined && d.infl < -0.6) lines.push('Fiyat artışları belirgin yavaşladı. Bu ivmeyi korumak için erken gevşemeden kaçının.');
     if (d.infl !== undefined && d.infl > 0.8) lines.push('Enflasyon yeniden ivmelendi. Kur geçişkenliği ve talep baskısına dikkat.');
+    if ((s.coupRisk || 0) >= 40) lines.push('Darbe riski %' + Math.round(s.coupRisk) + ': halk desteği ve güvenilirlik düşükken ordu siyasete heveslenir. Desteği toparlayın, savunmayı ihmal etmeyin.');
     if (s.flags.tension && !s.war) lines.push('Sınırdaki gerilim ciddi. Savunma gücümüz ' + Math.round(s.defense) + '/100: saldırı gelirse bu rakam kaderimizi belirler; savunma ve AR-GE payını gözden geçirin.');
     if (s.war && s.war.active) lines.push(s.war.front < 0 ? 'Cephe aleyhimize. Seferberlik, müttefik desteği ya da onurlu bir ateşkes için geç kalmayın.' : 'Cephe lehimize; ekonomiyi savaş yükü altında ayakta tutmaya odaklanın.');
     if (s.coverMonths < 3.5) lines.push('Rezervler ithalatın 3,5 ayını bile karşılamıyor. Döviz satarak kuru savunmak sürdürülebilir değil.');

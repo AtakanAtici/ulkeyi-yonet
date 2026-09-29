@@ -81,6 +81,8 @@
     boom: () => { noise(0.7, 120, 0.35, { type: 'lowpass', q: 0.5, attack: 0.01 }); tone(70, 0.6, 'sine', 0.25, { to: 35 }); noise(0.25, 2500, 0.08, { attack: 0.005 }); },
     flak: () => { noise(0.12, 1800, 0.12, { attack: 0.005 }); tone(900, 0.08, 'square', 0.05, { to: 300 }); },
     plane: () => { tone(110, 2.2, 'sawtooth', 0.05, { to: 80, attack: 0.6 }); tone(112, 2.2, 'sawtooth', 0.04, { to: 82, attack: 0.6 }); },
+    firework: () => { tone(600, 0.5, 'sine', 0.05, { to: 1500, attack: 0.05 }); noise(0.35, 900, 0.22, { attack: 0.005, delay: 0.5 }); tone(180, 0.35, 'sine', 0.12, { to: 60, delay: 0.5 }); },
+    cheer: () => { noise(2.2, 1200, 0.16, { q: 0.4, attack: 0.5 }); noise(1.6, 2600, 0.06, { q: 0.5, attack: 0.3, delay: 0.4 }); seq([784, 988, 1175], 0.2, 'triangle', 0.08, 0.12); },
     warStart: () => { seq([220, 220, 220, 175], 0.35, 'square', 0.1, 0.3); noise(1.2, 200, 0.15, { type: 'lowpass', attack: 0.3, delay: 1.0 }); },
   };
 

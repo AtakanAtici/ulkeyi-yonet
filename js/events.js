@@ -236,6 +236,15 @@
         { label: 'Toprak ver, barış iste', desc: 'Savaş olmaz ama halk aşağılanmayı affetmez: destek −18, güvenilirlik −8, borç +5.', apply: s => { s.flags.warDone = true; s.flags.tension = false; s.flags.appeased = true; SEG(s, -18); s.cred -= 8; s.debt += 5; s.anger = Math.min(100, s.anger + 15); } },
       ],
     },
+    {
+      id: 'darbe', icon: '🪖', title: 'DARBE GİRİŞİMİ!', weight: 0, once: false, manual: true,
+      text: 'Gece yarısı tanklar köprüleri tuttu, devlet radyosundan "yönetime el konulmuştur" bildirisi okunuyor. Genelkurmayın bir kanadı sizinle, bir kanadı darbecilerle. Sokağa çıkma yasağı ilan edildi. Karar sizin, saatler sayılı.',
+      choices: [
+        { label: 'Halkı sokağa çağır: direniş!', desc: 'Kamuoyu desteği yüksekse darbe çöker; düşükse direniş kırılır ve cunta seni tutuklar.', apply: (s, rng) => { Coup.resolve(s, 'resist', rng); } },
+        { label: 'Generallerle pazarlık yap', desc: 'Darbe kesin biter ama savunma bütçesi artar, güvenilirlik −7, ordu siyasette söz sahibi olur.', apply: (s, rng) => { Coup.resolve(s, 'bargain', rng); } },
+        { label: 'Uluslararası destek iste', desc: 'Güvenilirlik yüksekse dünya darbeyi tanımaz; düşükse kimse telefonu açmaz ve cunta kazanır.', apply: (s, rng) => { Coup.resolve(s, 'intl', rng); } },
+      ],
+    },
   ];
 
   function SEG(s, d) { Object.keys(s.moods).forEach(k => s.moods[k] = cl(s.moods[k] + d, 0, 100)); }

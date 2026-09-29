@@ -275,6 +275,7 @@
     const ul = $('voiceList');
     if (!ul.children.length || s.turn !== G.lastVoiceTurn) { G.lastVoiceTurn = s.turn; ul.innerHTML = ''; const segs = Model.SEGMENTS.slice().sort(() => Math.random() - 0.5).slice(0, 3); segs.forEach(seg => addVoice(seg, Voices.pickQuote(seg.id, s.moods[seg.id]))); }
     $('advisorNote').textContent = Voices.advisorComment(s, s.lastReport)[0];
+    const cp = $('coupPill'); const cr = s.coupRisk || 0; cp.classList.toggle('hidden', cr < 15); cp.className = 'coup-pill ' + (cr >= 50 ? 'high' : cr >= 30 ? 'mid' : 'low') + (cr < 15 ? ' hidden' : ''); cp.innerHTML = `🪖 Darbe riski <b>%${Math.round(cr)}</b> · ${cr >= 50 ? 'Kışlalar hareketli!' : cr >= 30 ? 'Generaller homurdanıyor' : 'Düşük'}`;
   }
   function addVoice(seg, q, top) {
     const ul = $('voiceList'); const li = document.createElement('li'); li.style.borderLeftColor = seg.color; li.innerHTML = `<b>${seg.name}</b>${q}`;
@@ -310,6 +311,7 @@
     const sc = Model.SCENARIOS.find(x => x.id === s.scenarioId);
     let ev = s.gameOver ? null : (s.turn === 1 && sc && sc.firstEvent ? Events.EVENTS.find(x => x.id === sc.firstEvent) : Events.pickEvent(s, G.rng));
     if (!s.gameOver && War.shouldDeclare(s, G.rng)) ev = Events.EVENTS.find(x => x.id === 'savasilani');
+    else if (!s.gameOver && Coup.shouldAttempt(s, G.rng)) ev = Events.EVENTS.find(x => x.id === 'darbe');
     const warEnded = report.war && report.war.type !== 'devam';
     const afterEvent = () => { if (isQuarter && !s.gameOver) showReport(report, cont); else cont(); };
     const afterWar = () => { if (ev) showEvent(ev, afterEvent); else afterEvent(); };
@@ -359,6 +361,7 @@
   }
   function showEvent(ev, done) {
     stopAutoSoft(); Sound.play('event');
+    if (ev.id === 'darbe') { G.city.startCoup(); Sound.play('warStart'); window.scrollTo({ top: 0, behavior: 'smooth' }); }
     const c = showModal(`<div class="modal-head"><div class="ico">${ev.icon}</div><div><div class="kicker">Son dakika · ${Model.MONTHS[G.state.month - 1]} ${G.state.year}</div><h2>${ev.title}</h2></div></div>
       <div class="modal-body"><p>${ev.text}</p><h3>Kararınız?</h3>${ev.choices.map((ch, i) => `<button class="choice" data-i="${i}"><b>${ch.label}</b><span>${ch.desc}</span></button>`).join('')}</div>`);
     c.querySelectorAll('.choice').forEach(b => b.addEventListener('click', () => {
@@ -369,8 +372,17 @@
       G.state.events.push({ id: ev.id, turn: G.state.turn, choice: ch.label, title: ev.title });
       Model.recomputeDerived(G.state); Model.checkGameOver(G.state);
       closeModal(); toast(`${ev.icon} ${ev.title}: ${ch.label}`); G.city.floatAt('meclis', ev.icon + ' ' + ev.title, '#fde68a');
+      const cr = G.state.flags.coupResult;
+      if (cr) { delete G.state.flags.coupResult; G.city.endCoup(cr.success); renderAll(); save(); showCoupResult(cr, done); return; }
       renderAll(); save(); done();
     }));
+  }
+  function showCoupResult(cr, done) {
+    Sound.play(cr.success ? 'cheer' : 'lose');
+    showModal(`<div class="modal-head ${cr.success ? 'gold' : 'grim'}"><div class="ico">${cr.success ? '✊' : '🪖'}</div><div><div class="kicker">Darbe girişimi</div><h2>${cr.title}</h2></div></div>
+      <div class="modal-body">${cr.success ? '' : coupScene()}<p>${cr.text}</p></div>
+      <div class="modal-foot"><button class="btn primary" id="coupOk">Devam</button></div>`);
+    $('coupOk').addEventListener('click', () => { closeModal(); if (G.state.gameOver) showEnd(); else done(); });
   }
   function stopAutoSoft() { clearTimeout(G.autoTimer); }
   function showReport(report, done) {
@@ -404,9 +416,9 @@
     Sound.play(won ? 'win' : 'lose');
     const first = s.history[0], last = s.history[s.history.length - 1];
     const scoreId = recordScore(s);
-    const occupied = go.type === 'isgal';
-    showModal(`<div class="modal-head ${occupied ? 'grim' : ''}"><div class="ico">${won ? '🏆' : go.type === 'secim_yenilgi' ? '🗳️' : occupied ? '💀' : '💥'}</div><div><div class="kicker">Oyun bitti · ${s.turn}. ay</div><h2>${go.title}</h2></div></div>
-      <div class="modal-body">${occupied ? occupationScene() : ''}<p>${go.text}</p><div class="grade ${gr}">${gr}</div><p style="text-align:center"><b>Toplam skor: ${s.score}</b> · Ortalama ${Math.round(s.score / Math.max(1, s.turn))}/ay</p>
+    const occupied = go.type === 'isgal'; const coup = go.type === 'darbe';
+    showModal(`<div class="modal-head ${occupied || coup ? 'grim' : ''}"><div class="ico">${won ? '🏆' : go.type === 'secim_yenilgi' ? '🗳️' : occupied ? '💀' : coup ? '🪖' : '💥'}</div><div><div class="kicker">Oyun bitti · ${s.turn}. ay</div><h2>${go.title}</h2></div></div>
+      <div class="modal-body">${occupied ? occupationScene() : coup ? coupScene() : ''}<p>${go.text}</p><div class="grade ${gr}">${gr}</div><p style="text-align:center"><b>Toplam skor: ${s.score}</b> · Ortalama ${Math.round(s.score / Math.max(1, s.turn))}/ay</p>
         <div class="stats-grid"><div>Enflasyon<b>%${fmtN(first.infl, 1)} → %${fmtN(last.infl, 1)}</b></div><div>İşsizlik<b>%${fmtN(first.unemp, 1)} → %${fmtN(last.unemp, 1)}</b></div><div>USD/TRY<b>${fmtN(first.fx, 2)} → ${fmtN(last.fx, 2)}</b></div><div>Rezervler<b>${fmtN(first.reserves, 0)} → ${fmtN(last.reserves, 0)}</b></div><div>Destek<b>${Math.round(first.support)} → ${Math.round(last.support)}</b></div><div>Güvenilirlik<b>${Math.round(first.cred)} → ${Math.round(last.cred)}</b></div></div>
         ${(s.warHistory || []).length ? `<h3>⚔️ Savaş</h3><div class="note">${s.warHistory.map(w => `${War.OUTCOME_TEXT[w.outcome].icon} ${War.OUTCOME_TEXT[w.outcome].title} · ${w.months} ay · ${w.casualties} bin kayıp · düşman gücü ${w.enemy}`).join(' · ')}</div>` : ''}
         ${s.events.length ? `<h3>Yaşanan olaylar</h3><div class="note">${s.events.map(e => `${e.title} → ${e.choice}`).join(' · ')}</div>` : ''}
@@ -465,12 +477,53 @@
     Sound.play(res.type === 'zafer' ? 'win' : res.type === 'ateskes' ? 'report' : 'lose');
     stopAutoSoft();
     G.city.floatAt('meclis', o.icon + ' ' + o.title.toUpperCase(), res.type === 'zafer' ? '#86efac' : '#fca5a5');
-    const w = G.state.war;
-    showModal(`<div class="modal-head"><div class="ico">${o.icon}</div><div><div class="kicker">Savaş sona erdi · ${w.month} ay</div><h2>${o.title}</h2></div></div>
-      <div class="modal-body"><p>${o.text}</p><p class="note">${res.why || ''}</p>
+    const w = G.state.war; const victory = res.type === 'zafer';
+    if (victory) G.city.startCelebration(45);
+    showModal(`<div class="modal-head ${victory ? 'gold' : ''}"><div class="ico">${o.icon}</div><div><div class="kicker">Savaş sona erdi · ${w.month} ay</div><h2>${victory ? 'ZAFER! 🎉' : o.title}</h2></div></div>
+      <div class="modal-body">${victory ? victoryScene() : ''}<p>${o.text}</p><p class="note">${res.why || ''}</p>
       <div class="stats-grid"><div>Kayıplar<b>${Math.round(w.casualties)} bin</b></div><div>Düşman gücü<b>${w.enemy}</b></div><div>Gücümüz<b>${Math.round(War.power(G.state))}</b></div></div></div>
       <div class="modal-foot"><button class="btn primary" id="warOk">Devam</button></div>`);
     $('warOk').addEventListener('click', () => { closeModal(); done(); });
+  }
+
+  // Zafer sahnesi: altın gökyüzü, bayraklı şehir, havai fişek, kutlayan kalabalık ve konfeti
+  function victoryScene() {
+    const conf = Array.from({ length: 36 }, (_, i) => `<i style="left:${(i * 2.77) % 100}%;animation-delay:${(i * 0.17) % 2.2}s;animation-duration:${2.4 + (i % 5) * 0.4}s;background:${['#d7263d', '#fde68a', '#3b82f6', '#22c55e', '#f97316', '#fff'][i % 6]}"></i>`).join('');
+    const fw = [[110, 60, '#fde68a'], [300, 40, '#f87171'], [470, 70, '#93c5fd'], [200, 95, '#86efac']].map(([x, y, col]) => `<g stroke="${col}" stroke-width="2" stroke-linecap="round">${Array.from({ length: 12 }, (_, k) => { const a = k / 12 * Math.PI * 2; return `<line x1="${x + Math.cos(a) * 8}" y1="${y + Math.sin(a) * 8}" x2="${x + Math.cos(a) * 26}" y2="${y + Math.sin(a) * 26}"/>`; }).join('')}<circle cx="${x}" cy="${y}" r="3" fill="${col}"/></g>`).join('');
+    const crowd = Array.from({ length: 22 }, (_, i) => { const x = 20 + i * 26 + (i % 2) * 6, y = 178 - (i % 3) * 4; return `<g fill="#3b2a1e"><circle cx="${x}" cy="${y}" r="5"/><rect x="${x - 4}" y="${y + 5}" width="8" height="14" rx="3"/><line x1="${x - 4}" y1="${y + 8}" x2="${x - 11}" y2="${y - 4}" stroke="#3b2a1e" stroke-width="2.5" stroke-linecap="round"/><line x1="${x + 4}" y1="${y + 8}" x2="${x + 11}" y2="${y - 4}" stroke="#3b2a1e" stroke-width="2.5" stroke-linecap="round"/>${i % 4 === 0 ? `<rect x="${x + 9}" y="${y - 14}" width="10" height="7" fill="#d7263d"/><circle cx="${x + 14}" cy="${y - 10.5}" r="1.6" fill="#fff"/>` : ''}</g>`; }).join('');
+    return `<div class="victory"><div class="confetti">${conf}</div><svg viewBox="0 0 600 220" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Zafer kutlaması">
+      <defs><linearGradient id="vsky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1e3a8a"/><stop offset=".6" stop-color="#f59e0b"/><stop offset="1" stop-color="#fde68a"/></linearGradient></defs>
+      <rect width="600" height="220" fill="url(#vsky)"/>
+      <circle cx="520" cy="120" r="34" fill="#fff7d6" opacity=".9"/>
+      ${fw}
+      <g fill="#7c4a1e"><rect x="20" y="120" width="50" height="80"/><rect x="80" y="100" width="34" height="100"/><rect x="160" y="110" width="60" height="90"/><rect x="240" y="96" width="120" height="104"/><path d="M240 96 h120 l-10 -22 h-100Z" fill="#5b3a2e"/><rect x="380" y="118" width="40" height="82"/><rect x="430" y="105" width="30" height="95"/><rect x="480" y="130" width="70" height="70"/><rect x="560" y="115" width="30" height="85"/></g>
+      <g fill="#fde68a" opacity=".85"><rect x="28" y="130" width="8" height="10"/><rect x="48" y="130" width="8" height="10"/><rect x="28" y="150" width="8" height="10"/><rect x="170" y="120" width="8" height="10"/><rect x="200" y="140" width="8" height="10"/><rect x="390" y="128" width="8" height="10"/><rect x="440" y="115" width="8" height="10"/><rect x="490" y="140" width="8" height="10"/></g>
+      <g><rect x="298" y="30" width="4" height="66" fill="#3b2a1e"/><path d="M302 30 h70 l-10 12 l10 12 h-70Z" fill="#d7263d"/><circle cx="330" cy="42" r="6" fill="#fff"/><circle cx="332.5" cy="42" r="5" fill="#d7263d"/><polygon points="341,42 344,44.5 343,41 346,39 342.5,39 341,36 339.5,39 336,39 339,41 338,44.5" fill="#fff"/></g>
+      <rect x="250" y="106" width="100" height="14" fill="#b8860b"/><text x="300" y="117" text-anchor="middle" font-family="Nunito, sans-serif" font-weight="900" font-size="11" fill="#fff8dc">ZAFER!</text>
+      <rect x="0" y="196" width="600" height="24" fill="#a16207"/>
+      ${crowd}
+      <text x="300" y="26" text-anchor="middle" font-family="Nunito, sans-serif" font-weight="900" font-size="16" fill="#fff" letter-spacing="4">ZAFER GÜNÜ</text>
+    </svg></div>`;
+  }
+
+  // Darbe sahnesi: gece, tanklar, Meclis önünde projektörler, radyo kulesi
+  function coupScene() {
+    const tank = (x, y, sc) => `<g transform="translate(${x} ${y}) scale(${sc})" fill="#0b1020"><rect x="-26" y="-6" width="52" height="16" rx="3"/><rect x="-12" y="-16" width="24" height="11" rx="2"/><rect x="10" y="-13" width="30" height="3"/><rect x="-28" y="8" width="56" height="7" rx="3.5"/><circle cx="-18" cy="11" r="3" fill="#1f2937"/><circle cx="-6" cy="11" r="3" fill="#1f2937"/><circle cx="6" cy="11" r="3" fill="#1f2937"/><circle cx="18" cy="11" r="3" fill="#1f2937"/></g>`;
+    const beam = (x, ang) => `<polygon points="${x},110 ${x + Math.cos(ang - 0.09) * 260},${110 + Math.sin(ang - 0.09) * 260} ${x + Math.cos(ang + 0.09) * 260},${110 + Math.sin(ang + 0.09) * 260}" fill="#fef3c7" opacity=".16"/>`;
+    return `<div class="coup-scene"><svg viewBox="0 0 600 220" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Darbe gecesi">
+      <defs><linearGradient id="csky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#020617"/><stop offset="1" stop-color="#1e293b"/></linearGradient></defs>
+      <rect width="600" height="220" fill="url(#csky)"/>
+      <g fill="#e2e8f0" opacity=".7"><circle cx="60" cy="30" r="1.2"/><circle cx="140" cy="50" r="1"/><circle cx="420" cy="26" r="1.3"/><circle cx="520" cy="60" r="1"/><circle cx="330" cy="18" r="1"/></g>
+      <circle cx="510" cy="52" r="18" fill="#f1f5f9" opacity=".8"/>
+      ${beam(250, -1.9)}${beam(350, -1.25)}
+      <g fill="#0f172a"><rect x="20" y="120" width="50" height="80"/><rect x="80" y="100" width="34" height="100"/><rect x="130" y="125" width="60" height="75"/><rect x="230" y="110" width="140" height="90"/><path d="M230 110 h140 l-12 -22 h-116Z" fill="#111827"/><rect x="400" y="118" width="40" height="82"/><rect x="450" y="100" width="30" height="100"/><rect x="500" y="130" width="70" height="70"/></g>
+      <g stroke="#334155" stroke-width="2"><line x1="560" y1="200" x2="560" y2="40"/><line x1="548" y1="60" x2="572" y2="60"/><line x1="552" y1="80" x2="568" y2="80"/></g><circle cx="560" cy="38" r="4" fill="#ef4444"><animate attributeName="opacity" values="1;0.2;1" dur="1.2s" repeatCount="indefinite"/></circle>
+      <rect x="262" y="128" width="76" height="12" fill="#111827"/><text x="300" y="137" text-anchor="middle" font-family="Nunito, sans-serif" font-weight="900" font-size="8" fill="#fecaca">BİLDİRİ</text>
+      <rect x="0" y="196" width="600" height="24" fill="#0b1020"/>
+      ${tank(90, 186, 1)}${tank(220, 186, 1)}${tank(380, 186, 1)}${tank(500, 186, 1)}
+      <g fill="#0b1020"><circle cx="300" cy="170" r="5"/><rect x="295" y="175" width="10" height="16" rx="3"/><circle cx="320" cy="172" r="5"/><rect x="315" y="177" width="10" height="14" rx="3"/></g>
+      <text x="300" y="30" text-anchor="middle" font-family="Nunito, sans-serif" font-weight="900" font-size="16" fill="#fecaca" letter-spacing="4">SIKIYÖNETİM</text>
+    </svg></div>`;
   }
 
   // İşgal sahnesi: kızıl gökyüzü, yanan şehir silüeti, düşman bayrağı ve darağacı (siluet)
@@ -506,7 +559,7 @@
     return entry.id;
   }
   function renameScore(id, name) { const list = loadScores(); const e = list.find(x => x.id === id); if (e) { e.name = name; saveScores(list); } try { localStorage.setItem(NAME_KEY, name); } catch (err) { /* yoksay */ } }
-  const OUTCOME = { secim_zafer: '🏆 Seçim zaferi', secim_yenilgi: '🗳️ Seçim yenilgisi', istifa: '📢 İstifa', hiper: '☢️ Hiperenflasyon', temerrut: '💥 Dış borç krizi', isgal: '💀 İşgal' };
+  const OUTCOME = { secim_zafer: '🏆 Seçim zaferi', secim_yenilgi: '🗳️ Seçim yenilgisi', istifa: '📢 İstifa', hiper: '☢️ Hiperenflasyon', temerrut: '💥 Dış borç krizi', isgal: '💀 İşgal', darbe: '🪖 Darbe' };
   function scoreTableHtml(highlightId, limit) {
     const list = loadScores().slice(0, limit || 10);
     if (!list.length) return '<p class="note">Henüz tamamlanmış oyun yok. İlk rekoru siz kırın!</p>';

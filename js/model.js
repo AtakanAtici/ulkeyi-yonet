@@ -128,7 +128,7 @@
         rate: s.rate, rr: s.rr, rrFx: s.rrFx, comm: 0, guidance: 'belirsiz', intervention: 0, creditStd: 0,
         directTax: 18, indirectTax: 18, spendCurrent: 20, invest: 5, transfers: 8, defense: 2, rnd: 0.5, minWageRaise: null,
       },
-      defense: s.defense !== undefined ? s.defense : 35, tech: s.tech !== undefined ? s.tech : 30, war: null, warHistory: [],
+      defense: s.defense !== undefined ? s.defense : 35, tech: s.tech !== undefined ? s.tech : 30, war: null, warHistory: [], coupRisk: 0,
       prevPolicy: null, programs: {}, shocks: [], flags: {}, history: [], events: [], newsLog: [],
       gameOver: null, score: 0, lastReport: null,
     };
@@ -209,6 +209,7 @@
     if (d.infl < -0.5) n.push(`Enflasyon geriliyor: manşet %${state.infl.toFixed(1)}. Piyasalar temkinli iyimser.`);
     if (d.infl > 0.8) n.push(`Zam dalgası: pazarda domates ve kira fiyatları yeniden gündemde.`);
     if (state.unemp > 11) n.push(`İşsizlik %${state.unemp.toFixed(1)}: genç işsizliği rekor seviyede.`);
+    if (state.coupRisk > 45) n.push('Kışlalarda hareketlilik: emekli generaller televizyonda "devletin bekası" diyor.');
     if (state.anger > 65) n.push(`Meydanlarda protesto: "Geçinemiyoruz" sloganları yükseliyor.`);
     if (state.coverMonths < 3) n.push(`Rezervler eridi: ithalatçılar döviz bulmakta zorlanıyor.`);
     if (state.cds > 500) n.push(`CDS primi ${Math.round(state.cds)} baz puan: yabancı yatırımcı çıkışı hızlandı.`);
@@ -371,6 +372,8 @@
     const inflSurprise = Math.max(0, state.infl - before.infl) * 4;
     const angerTarget = 100 - state.support + inflSurprise + (state.unemp > 12 ? 8 : 0);
     state.anger = clamp(state.anger + 0.3 * (angerTarget - state.anger), 0, 100);
+
+    if (global.Coup) state.coupRisk = Coup.risk(state);
 
     // ---------- 2b. Savaş ----------
     let warResult = null;
