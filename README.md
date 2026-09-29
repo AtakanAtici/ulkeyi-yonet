@@ -34,14 +34,17 @@ Boşluk: ayı ilerlet · Shift+Enter: çeyrek sonuna · ↑/↓: faiz ±1 puan
 Oyun otomatik kaydedilir; menüden yeni oyun başlatabilirsiniz.
 
 ## Yayınlama
-Oyun Claude Artifacts üzerinde yayında: https://claude.ai/artifact/2bWN7ELgyr3RPhFrf2Mgp2
-Bağlantı sahibine özeldir; sayfadaki **Paylaş** menüsünden herkese açık hale getirilebilir.
+Oyun herkese açık, giriş gerektirmeyen adreste yayında: **https://atakanatici.github.io/ulkeyi-yonet/**
+Kaynak deposu: https://github.com/AtakanAtici/ulkeyi-yonet
 
-Yayın sayfası `index.html`'den üretilir:
+Değişiklikleri yayına almak için:
 
 ```bash
-node build-artifact.js
+git add -A && git commit -m "güncelleme" && git push
 ```
 
-Çıktı `dist/ulkeyi-yonet.html` dosyasıdır; `css/` ve `js/` klasörleri yanında yayınlanır.
-Alternatif ücretsiz barındırma: GitHub Pages, Netlify Drop veya Vercel'e klasörü olduğu gibi yüklemek yeterlidir (derleme gerekmez).
+GitHub Pages `main` dalının kökünden yayın yapar; güncelleme 1-2 dakika içinde yansır.
+`deploy-github.sh` betiği ilk kurulum içindir (depoyu oluşturur ve Pages'i açar).
+
+Claude Artifacts kopyası (yalnızca sahibi ve paylaşılanlar açabilir): https://claude.ai/artifact/2bWN7ELgyr3RPhFrf2Mgp2
+Yayın sayfası `node build-artifact.js` ile `dist/ulkeyi-yonet.html` olarak üretilir.
