@@ -6,7 +6,7 @@
   const $ = id => document.getElementById(id);
   const fmtN = (v, dec) => v.toLocaleString('tr-TR', { minimumFractionDigits: dec, maximumFractionDigits: dec });
   const SAVE_KEY = 'ulkeyiYonetSave_v1';
-  const LB_KEY = 'ulkeyiYonetScores_v1', NAME_KEY = 'ulkeyiYonetName';
+  const LB_KEY = 'ulkeyiYonetScores_v1';
 
   const INDICATORS = [
     { key: 'infl', label: 'Manşet Enflasyon', unit: '%', dec: 1, color: '#d9534f', good: 'down', target: s => s.target, bar: [0, 60] },
@@ -75,7 +75,6 @@
       const modalOpen = !$('modal').classList.contains('hidden');
       // Enter: açık pencerede ana düğmeyi tetikle (Devam, İleri, Kararı Açıkla, Göreve Başla)
       if (e.key === 'Enter' && !e.shiftKey && modalOpen) {
-        if (typing && e.target.id === 'nameInput') { e.target.blur(); e.preventDefault(); return; }
         const primary = $('modalCard').querySelector('.modal-foot .btn.primary');
         if (primary) { e.preventDefault(); primary.click(); }
         return;
@@ -330,19 +329,85 @@
   function closeModal() { $('modal').classList.add('hidden'); $('modalCard').classList.remove('wide'); }
   function advisorBlock(text) { return `<div class="dialog"><div class="advisor-avatar"></div><div class="bubble">${text}</div></div>`; }
 
-  function showStartModal() {
-    let sc = Model.SCENARIOS[0].id, diff = 'orta';
-    const c = showModal(`<div class="modal-head"><div class="ico">🏛️</div><div><div class="kicker">Yeni Oyun</div><h2>Ülkeyi Yönet</h2></div></div>
-      <div class="modal-body">${advisorBlock('Hoş geldiniz Başkanım! Hangi ülkeyi devralmak istersiniz? Her senaryo farklı bir başlangıç noktası sunar. Görev süreniz 48 ay; sonunda seçim var.')}
-      <h3>Senaryo</h3><div class="scenarios">${Model.SCENARIOS.map(x => `<button class="scenario ${x.id === sc ? 'active' : ''}" data-sc="${x.id}"><div class="ico">${x.icon}</div><div><b>${x.title}<span class="tag ${x.tag.includes('Zor') ? 'zor' : x.tag === 'Kolay' ? 'kolay' : ''}">${x.tag}</span></b><p>${x.desc}</p><div class="stats"><span>Enflasyon %${fmtN(x.state.infl, 1)}</span><span>Faiz %${fmtN(x.state.rate, 2)}</span><span>USD/TRY ${fmtN(x.state.fx, 2)}</span><span>Büyüme %${fmtN(x.state.growth, 1)}</span><span>İşsizlik %${fmtN(x.state.unemp, 1)}</span></div></div></button>`).join('')}</div>
-      <h3>Zorluk</h3><div class="diff-row">${Object.keys(Model.DIFFICULTIES).map(k => `<button class="btn light ${k === diff ? 'active' : ''}" data-diff="${k}" title="${Model.DIFFICULTIES[k].desc}">${Model.DIFFICULTIES[k].label}</button>`).join('')}</div>
-      <div class="note" id="diffNote">${Model.DIFFICULTIES[diff].desc}</div></div>
-      <div class="modal-foot"><button class="btn light" id="startScores">🏆 Skor Tablosu</button><button class="btn primary" id="startBtn">🚀 Göreve Başla</button></div>`);
-    c.classList.add('wide');
-    $('startScores').addEventListener('click', () => showScores(showStartModal));
-    c.querySelectorAll('.scenario').forEach(b => b.addEventListener('click', () => { sc = b.dataset.sc; c.querySelectorAll('.scenario').forEach(x => x.classList.toggle('active', x === b)); }));
-    c.querySelectorAll('[data-diff]').forEach(b => b.addEventListener('click', () => { diff = b.dataset.diff; c.querySelectorAll('[data-diff]').forEach(x => x.classList.toggle('active', x === b)); $('diffNote').textContent = Model.DIFFICULTIES[diff].desc; }));
-    $('startBtn').addEventListener('click', () => { Sound.play('good'); closeModal(); newGame(sc, diff); });
+  // ============ Başlangıç asistanı ============
+  const WZ = { sc: null, diff: 'orta' };
+  const NAME_RE = /^[0-9A-Za-zÇĞİÖŞÜçğıöşü _.\-]{3,20}$/;
+  const LOGO = '<img src="assets/logo.svg" alt="DEVA" class="wz-logo">';
+  function scenarioCardsHtml(sc) { return Model.SCENARIOS.map(x => `<button class="scenario ${x.id === sc ? 'active' : ''}" data-sc="${x.id}"><div class="ico">${x.icon}</div><div><b>${x.title}<span class="tag ${x.tag.includes('Zor') ? 'zor' : x.tag === 'Kolay' ? 'kolay' : ''}">${x.tag}</span></b><p>${x.desc}</p><div class="stats"><span>Enflasyon %${fmtN(x.state.infl, 1)}</span><span>Faiz %${fmtN(x.state.rate, 2)}</span><span>USD/TRY ${fmtN(x.state.fx, 2)}</span><span>Büyüme %${fmtN(x.state.growth, 1)}</span><span>İşsizlik %${fmtN(x.state.unemp, 1)}</span></div></div></button>`).join(''); }
+  function showStartModal() { WZ.sc = WZ.sc || Model.SCENARIOS[0].id; const p = Api.player(); showWizard(p && p.name ? 2 : 0); }
+  function wizardHead(step, title) {
+    const labels = ['Hoş geldiniz', 'Oyuncu', 'Senaryo', 'Zorluk'];
+    return `<div class="modal-head wz-head"><div class="wz-badge">${LOGO}</div><div><div class="kicker">Başlangıç asistanı · Adım ${step + 1}/4</div><h2>${title}</h2></div></div>
+      <div class="wz-steps">${labels.map((l, i) => `<span class="${i === step ? 'on' : i < step ? 'done' : ''}">${i < step ? '✓' : i + 1} ${l}</span>`).join('')}</div>`;
+  }
+  function showWizard(step) {
+    const p = Api.player();
+    if (step === 0) {
+      showModal(`${wizardHead(0, 'Ülkeyi Yönet')}
+        <div class="modal-body"><div class="wz-hero">${LOGO}<div class="wz-tag">Ekonomi Simülasyonu</div></div>
+        ${advisorBlock('Hoş geldiniz! Ben başekonomistiniz Nilüfer. Bu asistan sizi üç kısa adımda göreve hazırlar: önce adınızı alırım, sonra devralacağınız ülkeyi ve zorluk seviyesini seçersiniz. Skorunuz ortak sıralamaya yazılır; diğer oyuncularla yarışırsınız.')}
+        <ul class="wz-list"><li>🏙️ Canlı şehir: halkın yüzü kararlarınıza göre değişir</li><li>🏦 Faiz, vergi, harcama, programlar, savunma ve teknoloji</li><li>⚔️ Savaş, darbe, krizler ve 48 ay sonunda seçim</li><li>🏆 Ortak skor tablosu</li></ul></div>
+        <div class="modal-foot"><button class="btn light" id="wzScores">🏆 Skor Tablosu</button><button class="btn primary" id="wzNext">Başlayalım →</button></div>`).classList.add('wide');
+      $('wzScores').addEventListener('click', () => showScores(() => showWizard(0)));
+      $('wzNext').addEventListener('click', () => { Sound.play('click'); showWizard(1); });
+    } else if (step === 1) {
+      nameStep({ head: wizardHead(1, 'Size nasıl hitap edelim?'), backLabel: '← Geri', onBack: () => showWizard(0), onDone: () => showWizard(2) });
+    } else if (step === 2) {
+      const c = showModal(`${wizardHead(2, 'Hangi ülkeyi devralıyorsunuz?')}
+        <div class="modal-body"><p class="note">Oyuncu: <b>${esc(p ? p.name : 'Başkan')}</b>${p && !p.token ? ' · çevrimdışı' : ''}. Her senaryo farklı bir başlangıç noktasıdır; zor senaryolarda skor katsayısı yüksektir.</p>
+        <div class="scenarios">${scenarioCardsHtml(WZ.sc)}</div></div>
+        <div class="modal-foot"><button class="btn light" id="wzBack">← Oyuncu</button><button class="btn primary" id="wzNext">Devam →</button></div>`);
+      c.classList.add('wide');
+      c.querySelectorAll('.scenario').forEach(b => b.addEventListener('click', () => { WZ.sc = b.dataset.sc; Sound.play('click'); c.querySelectorAll('.scenario').forEach(x => x.classList.toggle('active', x === b)); }));
+      c.querySelectorAll('.scenario').forEach(b => b.addEventListener('dblclick', () => showWizard(3)));
+      $('wzBack').addEventListener('click', () => showWizard(1));
+      $('wzNext').addEventListener('click', () => { Sound.play('click'); showWizard(3); });
+    } else {
+      const sc = Model.SCENARIOS.find(x => x.id === WZ.sc) || Model.SCENARIOS[0];
+      const c = showModal(`${wizardHead(3, 'Zorluk seviyesi')}
+        <div class="modal-body"><div class="wz-summary"><div><small>Oyuncu</small><b>${esc(p ? p.name : 'Başkan')}</b></div><div><small>Senaryo</small><b>${sc.icon} ${sc.title}</b></div><div><small>Süre</small><b>48 ay</b></div></div>
+        <div class="diff-row">${Object.keys(Model.DIFFICULTIES).map(k => `<button class="btn light ${k === WZ.diff ? 'active' : ''}" data-diff="${k}">${Model.DIFFICULTIES[k].label}</button>`).join('')}</div>
+        <div class="note" id="diffNote">${Model.DIFFICULTIES[WZ.diff].desc}</div>
+        ${advisorBlock('Hazırsınız Başkanım. Göreve başladığınızda kısa bir brifing vereceğim; isterseniz atlayabilirsiniz.')}</div>
+        <div class="modal-foot"><button class="btn light" id="wzBack">← Senaryo</button><button class="btn primary" id="startBtn">🚀 Göreve Başla</button></div>`);
+      c.querySelectorAll('[data-diff]').forEach(b => b.addEventListener('click', () => { WZ.diff = b.dataset.diff; Sound.play('click'); c.querySelectorAll('[data-diff]').forEach(x => x.classList.toggle('active', x === b)); $('diffNote').textContent = Model.DIFFICULTIES[WZ.diff].desc; }));
+      $('wzBack').addEventListener('click', () => showWizard(2));
+      $('startBtn').addEventListener('click', () => { Sound.play('good'); closeModal(); newGame(WZ.sc, WZ.diff); });
+    }
+  }
+  /** Kullanıcı adı adımı: sunucuya kaydeder (SQLite); sunucu yoksa cihazda tutar */
+  function nameStep(o) {
+    const p = Api.player();
+    showModal(`${o.head}
+      <div class="modal-body">${advisorBlock('Bu ad skor tablosunda görünür ve size özeldir: başkası aynı adı alamaz. 3-20 karakter; harf, rakam, boşluk, nokta, tire ve alt çizgi kullanabilirsiniz.')}
+      <label class="wz-label" for="wizName">Kullanıcı adınız</label>
+      <input id="wizName" class="wz-input" maxlength="20" autocomplete="off" spellcheck="false" placeholder="Örn. Başkan Atakan" value="${esc(p && p.name ? p.name : '')}">
+      <div id="wizStatus" class="wz-status">${p && p.name ? (p.token ? '✓ Kayıtlı oyuncu. Aynı adla devam edebilir ya da yeni bir ad alabilirsiniz.' : 'Bu ad yalnızca bu cihazda kayıtlı (çevrimdışı).') : ''}</div></div>
+      <div class="modal-foot"><button class="btn light" id="wzBack">${o.backLabel}</button><button class="btn primary" id="wzNext">Devam →</button></div>`);
+    const inp = $('wizName'), st = $('wizStatus'), next = $('wzNext'); let timer = null, seq = 0;
+    const setSt = (t, cls) => { st.textContent = t; st.className = 'wz-status ' + (cls || ''); };
+    setTimeout(() => { try { inp.focus(); inp.select(); } catch (e) { /* yoksay */ } }, 60);
+    inp.addEventListener('input', () => {
+      clearTimeout(timer); const name = inp.value.trim().replace(/\s+/g, ' ');
+      if (!name) { setSt(''); return; }
+      if (!NAME_RE.test(name)) { setSt('3-20 karakter; harf, rakam, boşluk, nokta, tire, alt çizgi.', 'bad'); return; }
+      if (p && p.token && p.name.toLocaleLowerCase('tr') === name.toLocaleLowerCase('tr')) { setSt('✓ Bu sizin kayıtlı adınız.', 'good'); return; }
+      setSt('Kontrol ediliyor…'); const my = ++seq;
+      timer = setTimeout(() => Api.checkName(name).then(r => { if (my === seq) setSt(r.available ? '✓ Bu ad uygun.' : '✗ Bu ad alınmış, başka bir ad deneyin.', r.available ? 'good' : 'bad'); }).catch(() => { if (my === seq) setSt('Skor sunucusuna ulaşılamıyor; ad bu cihazda tutulacak.', 'warn'); }), 350);
+    });
+    $('wzBack').addEventListener('click', o.onBack);
+    next.addEventListener('click', async () => {
+      const name = inp.value.trim().replace(/\s+/g, ' ');
+      if (!NAME_RE.test(name)) { setSt('Geçerli bir ad yazın: 3-20 karakter; harf, rakam, boşluk, nokta, tire, alt çizgi.', 'bad'); Sound.play('bad'); inp.focus(); return; }
+      if (p && p.token && p.name.toLocaleLowerCase('tr') === name.toLocaleLowerCase('tr')) { o.onDone(p); return; }
+      next.disabled = true; setSt('Kaydediliyor…');
+      try { const np = await Api.register(name); Sound.play('good'); toast(`Hoş geldiniz, ${np.name}! Adınız skor tablosuna kaydedildi.`, ''); o.onDone(np); }
+      catch (e) {
+        next.disabled = false;
+        if (e && e.offline) { Api.setPlayer({ name, online: false }); toast('Skor sunucusuna ulaşılamadı: skorlar bu cihazda tutulacak.', ''); o.onDone(Api.player()); }
+        else { setSt('✗ ' + ((e && e.message) || 'Kayıt başarısız.'), 'bad'); Sound.play('bad'); inp.focus(); }
+      }
+    });
   }
   function showContinueModal(saved) {
     const c = showModal(`<div class="modal-head"><div class="ico">💾</div><div><div class="kicker">Kayıtlı oyun bulundu</div><h2>Devam edilsin mi?</h2></div></div>
@@ -422,20 +487,21 @@
         <div class="stats-grid"><div>Enflasyon<b>%${fmtN(first.infl, 1)} → %${fmtN(last.infl, 1)}</b></div><div>İşsizlik<b>%${fmtN(first.unemp, 1)} → %${fmtN(last.unemp, 1)}</b></div><div>USD/TRY<b>${fmtN(first.fx, 2)} → ${fmtN(last.fx, 2)}</b></div><div>Rezervler<b>${fmtN(first.reserves, 0)} → ${fmtN(last.reserves, 0)}</b></div><div>Destek<b>${Math.round(first.support)} → ${Math.round(last.support)}</b></div><div>Güvenilirlik<b>${Math.round(first.cred)} → ${Math.round(last.cred)}</b></div></div>
         ${(s.warHistory || []).length ? `<h3>⚔️ Savaş</h3><div class="note">${s.warHistory.map(w => `${War.OUTCOME_TEXT[w.outcome].icon} ${War.OUTCOME_TEXT[w.outcome].title} · ${w.months} ay · ${w.casualties} bin kayıp · düşman gücü ${w.enemy}`).join(' · ')}</div>` : ''}
         ${s.events.length ? `<h3>Yaşanan olaylar</h3><div class="note">${s.events.map(e => `${e.title} → ${e.choice}`).join(' · ')}</div>` : ''}
-        <h3>🏆 Skor tablosu</h3><div class="name-row"><label for="nameInput">Adınız:</label><input id="nameInput" maxlength="20" value="${esc(playerName())}" placeholder="Başkan"></div><div id="lbBox">${scoreTableHtml(scoreId, 10)}</div></div>
+        <h3>🏆 Skor tablosu</h3><p class="note">Oyuncu: <b>${esc(playerName())}</b></p><div id="lbBox"></div></div>
       <div class="modal-foot"><button class="btn light" id="endClose">Tabloyu İncele</button><button class="btn light" id="endScores">Tüm skorlar</button><button class="btn primary" id="endNew">🔄 Yeni Oyun</button></div>`);
     $('endClose').addEventListener('click', closeModal);
     $('endScores').addEventListener('click', () => showScores(showEnd));
-    $('nameInput').addEventListener('input', e => { const n = e.target.value.trim() || 'Başkan'; renameScore(scoreId, n); $('lbBox').innerHTML = scoreTableHtml(scoreId, 10); });
+    mountLeaderboard($('lbBox'), { highlightId: scoreId, limit: 10 });
     $('endNew').addEventListener('click', () => { try { localStorage.removeItem(SAVE_KEY); } catch (e) { /* yoksay */ } closeModal(); showStartModal(); });
   }
   function showMenu() {
     const c = showModal(`<div class="modal-head"><div class="ico">☰</div><div><h2>Menü</h2></div></div><div class="modal-body menu-list">
-      <button class="btn light" id="mResume">▶ Oyuna dön</button><button class="btn light" id="mHelp">🎓 Nasıl oynanır?</button><button class="btn light" id="mEvents">📜 Olay günlüğü</button><button class="btn light" id="mScores">🏆 Skor tablosu</button><button class="btn danger" id="mNew">🔄 Yeni oyun (kayıt silinir)</button>
+      <button class="btn light" id="mResume">▶ Oyuna dön</button><button class="btn light" id="mHelp">🎓 Nasıl oynanır?</button><button class="btn light" id="mEvents">📜 Olay günlüğü</button><button class="btn light" id="mScores">🏆 Skor tablosu</button><button class="btn light" id="mPlayer">👤 Oyuncu: ${esc(playerName())}</button><button class="btn danger" id="mNew">🔄 Yeni oyun (kayıt silinir)</button>
       <p class="note">Kısayollar: Enter veya Boşluk = ay ilerlet · Shift+Enter = çeyrek · ↑/↓ = faiz ±1 puan · Enter = açık penceredeki Devam düğmesi</p></div>`, { closable: true });
     $('mResume').addEventListener('click', closeModal);
     $('mHelp').addEventListener('click', () => showTutorial(0));
     $('mScores').addEventListener('click', () => showScores(showMenu));
+    $('mPlayer').addEventListener('click', () => nameStep({ head: '<div class="modal-head"><div class="ico">👤</div><div><div class="kicker">Oyuncu</div><h2>Kullanıcı adı</h2></div></div>', backLabel: '← Menü', onBack: showMenu, onDone: showMenu }));
     $('mEvents').addEventListener('click', () => { const ev = G.state.events; showModal(`<div class="modal-head"><div class="ico">📜</div><div><h2>Olay günlüğü</h2></div></div><div class="modal-body">${ev.length ? ev.map(e => `<div class="headline">${e.turn}. ay · ${e.title} → <i>${e.choice}</i></div>`).join('') : '<p>Henüz olay yaşanmadı.</p>'}</div><div class="modal-foot"><button class="btn primary" id="evClose">Kapat</button></div>`); $('evClose').addEventListener('click', closeModal); });
     confirmButton($('mNew'), '⚠️ Eminim, mevcut oyunu sil', () => { try { localStorage.removeItem(SAVE_KEY); } catch (e) { /* yoksay */ } stopAuto(); closeModal(); showStartModal(); });
   }
@@ -548,7 +614,7 @@
   // ============ Skor tablosu ============
   function loadScores() { try { return JSON.parse(localStorage.getItem(LB_KEY)) || []; } catch (e) { return []; } }
   function saveScores(list) { try { localStorage.setItem(LB_KEY, JSON.stringify(list.slice(0, 50))); } catch (e) { /* yoksay */ } }
-  function playerName() { try { return localStorage.getItem(NAME_KEY) || 'Başkan'; } catch (e) { return 'Başkan'; } }
+  function playerName() { const p = Api.player(); return p && p.name ? p.name : 'Başkan'; }
   function recordScore(s) {
     if (s.flags.scoreId) return s.flags.scoreId;
     const sc = Model.SCENARIOS.find(x => x.id === s.scenarioId);
@@ -556,32 +622,64 @@
     const entry = { id: Date.now() + '-' + Math.floor(Math.random() * 1e6), name: playerName(), date: new Date().toISOString(), scenario: s.scenarioId, scenarioTitle: sc ? sc.title : s.scenarioId, icon: sc ? sc.icon : '🏛️', difficulty: s.difficulty, score: s.score, perMonth: Math.round(s.score / Math.max(1, s.turn)), grade: Model.grade(s), outcome: s.gameOver.type, turns: s.turn, infl: [first.infl, last.infl], unemp: [first.unemp, last.unemp], support: last.support, cred: last.cred };
     const list = loadScores(); list.push(entry); list.sort((a, b) => b.score - a.score); saveScores(list);
     s.flags.scoreId = entry.id; save();
+    syncScore(entry, s);
     return entry.id;
   }
-  function renameScore(id, name) { const list = loadScores(); const e = list.find(x => x.id === id); if (e) { e.name = name; saveScores(list); } try { localStorage.setItem(NAME_KEY, name); } catch (err) { /* yoksay */ } }
+  /** Skoru çevrimiçi tabloya (SQLite) gönderir; gerekirse önce oyuncuyu kaydeder */
+  async function syncScore(entry, s) {
+    try {
+      let p = Api.player();
+      if (p && p.name && !p.token) p = await Api.register(p.name);
+      if (!p || !p.token) return;
+      const wh = (s.warHistory || [])[0];
+      const r = await Api.submit({ scenario: entry.scenario, difficulty: entry.difficulty, score: entry.score, grade: entry.grade, outcome: entry.outcome, turns: entry.turns, inflStart: entry.infl[0], inflEnd: entry.infl[1], war: wh ? wh.outcome : null });
+      const list = loadScores(); const e = list.find(x => x.id === entry.id); if (e) { e.synced = true; saveScores(list); }
+      G.lastOnline = r;
+      if (G.lbRefresh) G.lbRefresh();
+      toast(`🌍 Skorunuz kaydedildi. Dünya sıralamanız: ${r.me ? '#' + r.me.rank : '—'}`, 'good');
+    } catch (e) { if (e && !e.offline && e.status !== 429) toast('Skor çevrimiçi tabloya yazılamadı: ' + e.message, 'bad'); }
+  }
   const OUTCOME = { secim_zafer: '🏆 Seçim zaferi', secim_yenilgi: '🗳️ Seçim yenilgisi', istifa: '📢 İstifa', hiper: '☢️ Hiperenflasyon', temerrut: '💥 Dış borç krizi', isgal: '💀 İşgal', darbe: '🪖 Darbe' };
-  function scoreTableHtml(highlightId, limit) {
-    const list = loadScores().slice(0, limit || 10);
+  function scoreTableHtml(highlightId, limit, scenario) {
+    const list = loadScores().filter(e => !scenario || scenario === 'all' || e.scenario === scenario).slice(0, limit || 10);
     if (!list.length) return '<p class="note">Henüz tamamlanmış oyun yok. İlk rekoru siz kırın!</p>';
     return '<div class="lb-wrap"><table class="lb"><tr><th>#</th><th>Oyuncu</th><th>Senaryo</th><th>Sonuç</th><th>Not</th><th>Skor</th></tr>' + list.map((e, i) => `<tr class="${e.id === highlightId ? 'me' : ''}"><td>${i + 1}</td><td>${esc(e.name)}<small>${new Date(e.date).toLocaleDateString('tr-TR')}</small></td><td>${e.icon} ${esc(e.scenarioTitle)}<small>${Model.DIFFICULTIES[e.difficulty] ? Model.DIFFICULTIES[e.difficulty].label : e.difficulty} · ${e.turns} ay</small></td><td>${OUTCOME[e.outcome] || e.outcome}<small>Enf. %${fmtN(e.infl[0], 0)} → %${fmtN(e.infl[1], 0)}</small></td><td><span class="lb-grade ${e.grade}">${e.grade}</span></td><td><b>${e.score}</b><small>${e.perMonth}/ay</small></td></tr>`).join('') + '</table></div>';
   }
   function esc(t) { return String(t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
-  function showScores(back) {
-    const c = showModal(`<div class="modal-head"><div class="ico">🏆</div><div><div class="kicker">En iyi 20</div><h2>Skor Tablosu</h2></div></div>
-      <div class="modal-body">${scoreTableHtml(G.state && G.state.flags ? G.state.flags.scoreId : null, 20)}</div>
-      <div class="modal-foot">${loadScores().length ? '<button class="btn light" id="lbClear">Tabloyu temizle</button>' : ''}<button class="btn primary" id="lbBack">${back ? '← Geri' : 'Kapat'}</button></div>`, { closable: !back });
-    c.classList.add('wide');
-    $('lbBack').addEventListener('click', () => { closeModal(); if (back) back(); });
-    const cl = $('lbClear'); if (cl) confirmButton(cl, '⚠️ Eminim, tabloyu sil', () => { saveScores([]); showScores(back); });
+  function globalTableHtml(d) {
+    if (!d.top.length) return '<p class="note">Bu sıralamada henüz skor yok. İlk rekoru siz kırın!</p>';
+    const me = (playerName() || '').toLocaleLowerCase('tr');
+    return '<div class="lb-wrap"><table class="lb"><tr><th>#</th><th>Oyuncu</th><th>Senaryo</th><th>Sonuç</th><th>Not</th><th>Skor</th></tr>' + d.top.map(e => { const sc = Model.SCENARIOS.find(x => x.id === e.scenario); const medal = e.rank === 1 ? '🥇' : e.rank === 2 ? '🥈' : e.rank === 3 ? '🥉' : e.rank;
+      return `<tr class="${e.name.toLocaleLowerCase('tr') === me ? 'me' : ''}"><td>${medal}</td><td>${esc(e.name)}<small>${e.games} oyun</small></td><td>${sc ? sc.icon + ' ' + esc(sc.title) : esc(e.scenario)}<small>${Model.DIFFICULTIES[e.difficulty] ? Model.DIFFICULTIES[e.difficulty].label : esc(e.difficulty)} · ${e.turns} ay</small></td><td>${OUTCOME[e.outcome] || esc(e.outcome)}<small>${e.inflStart != null ? `Enf. %${fmtN(e.inflStart, 0)} → %${fmtN(e.inflEnd, 0)}` : ''}${e.war ? ' · ' + War.OUTCOME_TEXT[e.war].icon : ''}</small></td><td><span class="lb-grade ${e.grade}">${e.grade}</span></td><td><b>${e.score}</b><small>${e.perMonth}/ay</small></td></tr>`; }).join('') + '</table></div>';
   }
-
-  // İki adımlı onay: ilk tıklamada düğme "Eminim" olur, 4 sn içinde ikinci tıklama işlemi yapar
-  function confirmButton(btn, label, action) {
-    btn.addEventListener('click', () => {
-      if (btn.dataset.armed) { clearTimeout(btn._t); action(); return; }
-      btn.dataset.armed = '1'; btn.dataset.orig = btn.textContent; btn.textContent = label; btn.classList.add('armed'); Sound.play('alarm');
-      btn._t = setTimeout(() => { delete btn.dataset.armed; btn.textContent = btn.dataset.orig; btn.classList.remove('armed'); }, 4000);
-    });
+  /** Skor tablosu: Dünya sıralaması (sunucu, SQLite) ve Bu cihaz sekmeleri, senaryo süzgeci */
+  function mountLeaderboard(box, opts) {
+    opts = opts || {}; let mode = opts.mode || 'global', scen = opts.scenario || 'all';
+    const render = () => {
+      if (!box.isConnected) { G.lbRefresh = null; return; }
+      box.innerHTML = `<div class="lb-tabs"><button class="btn small light ${mode === 'global' ? 'active' : ''}" data-m="global">🌍 Dünya sıralaması</button><button class="btn small light ${mode === 'local' ? 'active' : ''}" data-m="local">💻 Bu cihaz</button>
+        <select class="lb-select" id="lbScen" aria-label="Senaryo"><option value="all">Tüm senaryolar</option>${Model.SCENARIOS.map(x => `<option value="${x.id}" ${x.id === scen ? 'selected' : ''}>${x.title}</option>`).join('')}</select></div>
+        <div class="lb-me" id="lbMe"></div><div id="lbList"><p class="note">Yükleniyor…</p></div>`;
+      box.querySelectorAll('[data-m]').forEach(b => b.addEventListener('click', () => { mode = b.dataset.m; render(); }));
+      box.querySelector('#lbScen').addEventListener('change', e => { scen = e.target.value; render(); });
+      const list = box.querySelector('#lbList'), me = box.querySelector('#lbMe');
+      if (mode === 'local') { list.innerHTML = scoreTableHtml(opts.highlightId, opts.limit || 20, scen); me.textContent = 'Bu cihazda oynanan oyunlar.'; return; }
+      Api.top(scen, opts.limit || 20).then(d => {
+        if (!list.isConnected) return;
+        list.innerHTML = globalTableHtml(d);
+        me.innerHTML = d.me ? `👤 <b>${esc(d.me.name)}</b> · sıralamanız <b>#${d.me.rank}</b> / ${d.total} oyuncu · en iyi skor <b>${d.me.best}</b> · ${d.me.games} oyun` : `${d.total} oyuncu yarışıyor. Bir oyunu bitirdiğinizde sıralamaya girersiniz.`;
+      }).catch(e => { if (!list.isConnected) return; me.textContent = '🌐 ' + ((e && e.message) || 'Skor sunucusuna ulaşılamıyor.') + ' Cihazdaki skorlar gösteriliyor.'; list.innerHTML = scoreTableHtml(opts.highlightId, opts.limit || 20, scen); });
+    };
+    G.lbRefresh = render; render();
+  }
+  function showScores(back) {
+    const c = showModal(`<div class="modal-head"><div class="ico">🏆</div><div><div class="kicker">Oyuncular yarışıyor</div><h2>Skor Tablosu</h2></div></div>
+      <div class="modal-body"><div id="lbBoxAll"></div></div>
+      <div class="modal-foot">${loadScores().length ? '<button class="btn light" id="lbClear">Cihaz tablosunu temizle</button>' : ''}<button class="btn primary" id="lbBack">${back ? '← Geri' : 'Kapat'}</button></div>`, { closable: !back });
+    c.classList.add('wide');
+    mountLeaderboard($('lbBoxAll'), { highlightId: G.state && G.state.flags ? G.state.flags.scoreId : null, limit: 20 });
+    $('lbBack').addEventListener('click', () => { closeModal(); if (back) back(); });
+    const cl = $('lbClear'); if (cl) confirmButton(cl, '⚠️ Eminim, cihaz tablosunu sil', () => { saveScores([]); showScores(back); });
   }
 
   // ============ Yardımcılar ============

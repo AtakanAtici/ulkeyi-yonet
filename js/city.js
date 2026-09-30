@@ -44,6 +44,7 @@
       this.bubble = null; this.hover = null; this.buildings = [];
       this.signs = ['ZAM İSTİYORUZ'];
       this.priceTag = { flash: 0 };
+      this.logo = new Image(); this.logo.src = 'assets/logo.svg';
       this.war = null; this.wasWar = false; this.planes = []; this.bombs = []; this.explosions = []; this.scorch = []; this.tracers = []; this.damage = {}; this.fire = []; this.sirenT = 0; this.planeT = 2;
       this.celebrate = 0; this.rockets = []; this.sparks = []; this.confetti = []; this.fwT = 0;
       this.coup = 0; this.bannerText = null;
@@ -527,6 +528,13 @@
           this.drawWindows(b, x + 4, y + 20 * sc, w - 8, h - 36 * sc, 4, 3, night, activity);
           ctx.fillStyle = '#1e3a5f'; ctx.fillRect(x + w / 2 - 24 * sc, y + 4 * sc, 48 * sc, 12 * sc); ctx.fillStyle = '#fff'; ctx.fillText('BANKA', x + w / 2, y + 10 * sc);
           ctx.fillStyle = dark('#2b3a4a'); ctx.fillRect(x + w / 2 - 8 * sc, gy - 16 * sc, 16 * sc, 16 * sc);
+          // çatı panosu: logo
+          if (this.logo && this.logo.complete && this.logo.naturalWidth) {
+            const bw = Math.min(w - 8, 78 * sc), bh = bw * 0.34, bx = x + w / 2 - bw / 2, by = y - bh - 10 * sc;
+            ctx.fillStyle = dark('#6b7280'); ctx.fillRect(bx + 8 * sc, y - 10 * sc, 3, 10 * sc); ctx.fillRect(bx + bw - 11 * sc, y - 10 * sc, 3, 10 * sc);
+            ctx.fillStyle = night > 0.4 ? '#fffdf5' : '#ffffff'; ctx.fillRect(bx, by, bw, bh); ctx.strokeStyle = dark('#9ca3af'); ctx.lineWidth = 1; ctx.strokeRect(bx, by, bw, bh);
+            const lh = bh * 0.56, lw = lh * (283.465 / 72.072); ctx.drawImage(this.logo, bx + (bw - lw) / 2, by + (bh - lh) / 2, lw, lh);
+          }
           break;
         }
         case 'factory': {
