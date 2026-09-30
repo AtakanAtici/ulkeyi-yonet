@@ -1,0 +1,20 @@
+# Ülkeyi Yönet — Apache/Plesk ayarları
+Options -Indexes
+DirectoryIndex index.html
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  # Temiz API adresleri: /api/scores -> api/index.php?r=/scores
+  RewriteRule ^api/(health|players/check|players|scores)/?$ api/index.php?r=/$1 [QSA,L]
+  # Kaynak ve veri klasörlerini dışarıya kapat
+  RewriteRule ^(server|dist|\.git|\.claude)(/|$) - [F,L]
+  RewriteRule ^api/data(/|$) - [F,L]
+  RewriteRule \.(py|sh|md|db|sqlite)$ - [F,L]
+</IfModule>
+
+<IfModule mod_headers.c>
+  Header set X-Content-Type-Options "nosniff"
+  <FilesMatch "\.(js|css|html)$">
+    Header set Cache-Control "no-cache"
+  </FilesMatch>
+</IfModule>
