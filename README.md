@@ -76,17 +76,16 @@ Veritabanı web kökünün dışında, `/var/www/vhosts/ALANADI/ulkeyi-yonet-dat
 Oyun otomatik kaydedilir; menüden yeni oyun başlatabilirsiniz.
 
 ## Yayınlama
-Oyun herkese açık, giriş gerektirmeyen adreste yayında: **https://atakanatici.github.io/ulkeyi-yonet/**
-Kaynak deposu: https://github.com/AtakanAtici/ulkeyi-yonet
+Canlı adresler (Plesk, Deva Genel Hosting):
+- **https://nationpilot.com/** (oyun + SQLite skor API'si)
+- **https://yonetbakalim.com.tr/** (dosyalar yüklü; alan adının DNS kaydı sunucuya yönlendirildiğinde açılır)
 
-Değişiklikleri yayına almak için:
+Her iki alan adında Plesk Git eklentisi bu depoyu `main` dalından `httpdocs` klasörüne dağıtır. Değişiklikleri yayına almak için:
 
 ```bash
 git add -A && git commit -m "güncelleme" && git push
 ```
 
-GitHub Pages `main` dalının kökünden yayın yapar; güncelleme 1-2 dakika içinde yansır.
-`deploy-github.sh` betiği ilk kurulum içindir (depoyu oluşturur ve Pages'i açar).
+Ardından Plesk > alan adı > Git > **Pull now** (ya da Plesk'in verdiği webhook adresi GitHub deposuna eklenirse kendiliğinden).
 
-Claude Artifacts kopyası (yalnızca sahibi ve paylaşılanlar açabilir): https://claude.ai/artifact/2bWN7ELgyr3RPhFrf2Mgp2
-Yayın sayfası `node build-artifact.js` ile `dist/ulkeyi-yonet.html` olarak üretilir.
+Diğer kopyalar: GitHub Pages https://atakanatici.github.io/ulkeyi-yonet/ (skor sunucusu olmadan, cihaz tablosuyla çalışır). Kaynak: https://github.com/AtakanAtici/ulkeyi-yonet
