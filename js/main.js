@@ -42,6 +42,7 @@
   function init() {
     G.city = new City($('city'), { onBuildingClick: onBuildingClick, onHover: onCityHover, onAgentClick: onAgentClick, onSound: n => Sound.play(n) });
     bindUI();
+    setTimeout(syncPending, 2500);
     const saved = load();
     if (saved) showContinueModal(saved); else showStartModal();
   }
@@ -620,24 +621,40 @@
     const sc = Model.SCENARIOS.find(x => x.id === s.scenarioId);
     const first = s.history[0], last = s.history[s.history.length - 1];
     const entry = { id: Date.now() + '-' + Math.floor(Math.random() * 1e6), name: playerName(), date: new Date().toISOString(), scenario: s.scenarioId, scenarioTitle: sc ? sc.title : s.scenarioId, icon: sc ? sc.icon : '🏛️', difficulty: s.difficulty, score: s.score, perMonth: Math.round(s.score / Math.max(1, s.turn)), grade: Model.grade(s), outcome: s.gameOver.type, turns: s.turn, infl: [first.infl, last.infl], unemp: [first.unemp, last.unemp], support: last.support, cred: last.cred };
+    entry.war = ((s.warHistory || [])[0] || {}).outcome || null; entry.synced = false;
     const list = loadScores(); list.push(entry); list.sort((a, b) => b.score - a.score); saveScores(list);
     s.flags.scoreId = entry.id; save();
-    syncScore(entry, s);
+    syncScore(entry);
     return entry.id;
   }
-  /** Skoru çevrimiçi tabloya (SQLite) gönderir; gerekirse önce oyuncuyu kaydeder */
-  async function syncScore(entry, s) {
+  /** Skoru çevrimiçi tabloya (SQLite) gönderir; gerekirse önce oyuncuyu kaydeder. Başarısızsa kuyrukta kalır. */
+  async function syncScore(entry, quiet) {
     try {
       let p = Api.player();
       if (p && p.name && !p.token) p = await Api.register(p.name);
-      if (!p || !p.token) return;
-      const wh = (s.warHistory || [])[0];
-      const r = await Api.submit({ scenario: entry.scenario, difficulty: entry.difficulty, score: entry.score, grade: entry.grade, outcome: entry.outcome, turns: entry.turns, inflStart: entry.infl[0], inflEnd: entry.infl[1], war: wh ? wh.outcome : null });
+      if (!p || !p.token) return false;
+      const r = await Api.submit({ scenario: entry.scenario, difficulty: entry.difficulty, score: entry.score, grade: entry.grade, outcome: entry.outcome, turns: entry.turns, inflStart: entry.infl[0], inflEnd: entry.infl[1], war: entry.war || null });
       const list = loadScores(); const e = list.find(x => x.id === entry.id); if (e) { e.synced = true; saveScores(list); }
       G.lastOnline = r;
       if (G.lbRefresh) G.lbRefresh();
       toast(`🌍 Skorunuz kaydedildi. Dünya sıralamanız: ${r.me ? '#' + r.me.rank : '—'}`, 'good');
-    } catch (e) { if (e && !e.offline && e.status !== 429) toast('Skor çevrimiçi tabloya yazılamadı: ' + e.message, 'bad'); }
+      return true;
+    } catch (e) {
+      if (e && e.offline) { if (!quiet) toast('Skor sunucusuna şu an ulaşılamıyor: skorunuz cihazda saklandı, bağlantı gelince gönderilecek.', ''); }
+      else if (e && e.status === 400) { const list = loadScores(); const x = list.find(y => y.id === entry.id); if (x) { x.synced = 'rejected'; saveScores(list); } }
+      else if (e && e.status !== 429 && !quiet) toast('Skor çevrimiçi tabloya yazılamadı: ' + e.message, 'bad');
+      return false;
+    }
+  }
+  /** Daha önce gönderilemeyen skorları sırayla gönderir (sunucu art arda kayıtlar arasında 5 sn ister) */
+  async function syncPending() {
+    if (G.syncing) return; const p = Api.player(); if (!p || !p.name) return;
+    const mine = n => String(n || '').toLocaleLowerCase('tr') === p.name.toLocaleLowerCase('tr');
+    const pending = loadScores().filter(e => e.synced === false && mine(e.name) && e.infl && e.turns > 0);
+    if (!pending.length) return;
+    G.syncing = true;
+    try { for (const e of pending) { const ok = await syncScore(e, true); if (!ok) break; await new Promise(r => setTimeout(r, 6000)); } }
+    finally { G.syncing = false; }
   }
   const OUTCOME = { secim_zafer: '🏆 Seçim zaferi', secim_yenilgi: '🗳️ Seçim yenilgisi', istifa: '📢 İstifa', hiper: '☢️ Hiperenflasyon', temerrut: '💥 Dış borç krizi', isgal: '💀 İşgal', darbe: '🪖 Darbe' };
   function scoreTableHtml(highlightId, limit, scenario) {
@@ -666,9 +683,9 @@
       if (mode === 'local') { list.innerHTML = scoreTableHtml(opts.highlightId, opts.limit || 20, scen); me.textContent = 'Bu cihazda oynanan oyunlar.'; return; }
       Api.top(scen, opts.limit || 20).then(d => {
         if (!list.isConnected) return;
-        list.innerHTML = globalTableHtml(d);
+        list.innerHTML = globalTableHtml(d); syncPending();
         me.innerHTML = d.me ? `👤 <b>${esc(d.me.name)}</b> · sıralamanız <b>#${d.me.rank}</b> / ${d.total} oyuncu · en iyi skor <b>${d.me.best}</b> · ${d.me.games} oyun` : `${d.total} oyuncu yarışıyor. Bir oyunu bitirdiğinizde sıralamaya girersiniz.`;
-      }).catch(e => { if (!list.isConnected) return; me.textContent = '🌐 ' + ((e && e.message) || 'Skor sunucusuna ulaşılamıyor.') + ' Cihazdaki skorlar gösteriliyor.'; list.innerHTML = scoreTableHtml(opts.highlightId, opts.limit || 20, scen); });
+      }).catch(e => { if (!list.isConnected) return; me.innerHTML = '🌐 ' + esc((e && e.message) || 'Skor sunucusuna ulaşılamıyor.') + ' Cihazdaki skorlar gösteriliyor. <button class="btn small light" id="lbRetry">🔄 Tekrar dene</button>'; list.innerHTML = scoreTableHtml(opts.highlightId, opts.limit || 20, scen); const rb = box.querySelector('#lbRetry'); if (rb) rb.addEventListener('click', () => { Api.reset(); render(); syncPending(); }); });
     };
     G.lbRefresh = render; render();
   }

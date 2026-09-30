@@ -33,18 +33,22 @@
   }
   async function detect() {
     if (mode) return mode;
-    if (Date.now() - lastFail < 20000) return null;
+    if (Date.now() - lastFail < 4000) return null;
     for (const m of ['pretty', 'php']) {
       const r = await raw('/health', null, { timeout: 3500 }, m);
       if (!r.unreachable && r.res.ok && r.data && r.data.ok) { mode = m; return m; }
     }
     lastFail = Date.now(); return null;
   }
+  const pause = ms => new Promise(r => setTimeout(r, ms));
   async function call(route, query, opts) {
     opts = opts || {};
-    const m = await detect();
+    // Kısa kesintilerde (DNS, ağ) bir kez daha dene
+    let m = await detect();
+    if (!m) { await pause(900); lastFail = 0; m = await detect(); }
     if (!m) { A.online = false; throw { offline: true, message: 'Skor sunucusuna ulaşılamıyor.' }; }
-    const r = await raw(route, query, opts, m);
+    let r = await raw(route, query, opts, m);
+    if (r.unreachable && (opts.method || 'GET') === 'GET') { await pause(900); r = await raw(route, query, opts, m); }
     if (r.unreachable) { A.online = false; mode = null; lastFail = Date.now(); throw { offline: true, message: 'Skor sunucusuna ulaşılamıyor.' }; }
     A.online = true;
     if (!r.res.ok) throw { status: r.res.status, message: r.data.error || 'İstek başarısız.' };
